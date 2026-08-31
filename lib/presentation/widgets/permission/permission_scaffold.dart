@@ -55,23 +55,29 @@ class PermissionScaffold extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: AppDimensions.onboardingProgressBarTop),
-                      if (showProgressIndicator) ...[
+                      if (showProgressIndicator)
                         OnboardingProgressIndicator(
                           activeIndex: activeIndex,
                           segmentCount: segmentCount,
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (showBackButton)
-                        InkWell(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          borderRadius: BorderRadius.circular(20),
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.arrow_back_ios_new, size: 18),
-                          ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 28,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: showBackButton
+                              ? InkWell(
+                                  onTap: () => Navigator.of(context).maybePop(),
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Icon(Icons.arrow_back_ios_new, size: 18),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
                         ),
-                      const SizedBox(height: AppDimensions.permissionIconTop),
+                      ),
+                      const SizedBox(height: 12),
                       Center(child: icon),
                       const SizedBox(height: AppDimensions.permissionHeadlineTopGap),
                       Text(
