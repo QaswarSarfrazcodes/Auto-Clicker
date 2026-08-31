@@ -7,18 +7,18 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/routing/app_route_names.dart';
 import '../../../core/routing/spring_page_route.dart';
 import '../../widgets/onboarding/onboarding_scaffold.dart';
-import 'onboarding_custom_scripts_screen.dart';
+import '../permission/overlay_permission_screen.dart';
 
 /// Screen 3 — "No Root Required".
-/// Second onboarding step (progress index 1). Shows the back chevron.
+/// Step 2 of 4 onboarding steps (progress index 1).
 class OnboardingNoRootRequiredScreen extends StatelessWidget {
   const OnboardingNoRootRequiredScreen({super.key});
 
-  void _goToCustomScripts(BuildContext context) {
+  void _goToOverlayPermission(BuildContext context) {
     Navigator.of(context).push(
       SpringPageRoute(
-        settings: const RouteSettings(name: AppRouteNames.onboardingCustomScripts),
-        builder: (_) => const OnboardingCustomScriptsScreen(),
+        settings: const RouteSettings(name: AppRouteNames.overlayPermission),
+        builder: (_) => const OverlayPermissionScreen(),
       ),
     );
   }
@@ -32,14 +32,15 @@ class OnboardingNoRootRequiredScreen extends StatelessWidget {
 
     return OnboardingScaffold(
       activeIndex: 1,
+      segmentCount: 4,
       illustrationAsset: AppAssets.onboardingNoRootIllustration,
       headline: AppStrings.onboardingNoRootHeadline,
       subtext: subtext,
-      showBackButton: false,
+      showBackButton: true,
       showSkip: true,
       primaryLabel: AppStrings.next,
-      onPrimaryPressed: () => _goToCustomScripts(context),
-      onSkipPressed: () => _goToCustomScripts(context),
+      onPrimaryPressed: () => _goToOverlayPermission(context),
+      onSkipPressed: () => _goToOverlayPermission(context),
     );
   }
 }

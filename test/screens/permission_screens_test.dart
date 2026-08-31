@@ -14,7 +14,7 @@ void main() {
     );
 
     expect(find.text(AppStrings.accessibilityHeadline), findsOneWidget);
-    expect(find.text(AppStrings.enable), findsOneWidget);
+    expect(find.text(AppStrings.getStarted), findsOneWidget);
     expect(find.text(AppStrings.howItWorks), findsOneWidget);
   });
 

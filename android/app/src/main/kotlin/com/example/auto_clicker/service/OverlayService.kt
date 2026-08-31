@@ -568,17 +568,30 @@ class OverlayService : Service() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(2), 0, dp(4))
+            isClickable = true
+            setPadding(0, dp(4), 0, dp(6))
 
             val grip = TextView(this@OverlayService).apply {
-                text = "⠿ AUTO"
+                text = "⠿ AUTO ▾"
                 setTextColor(Color.parseColor("#38BDF8"))
-                textSize = 9f
+                textSize = 9.5f
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
                 letterSpacing = 0.08f
             }
             addView(grip)
+
+            val hint = TextView(this@OverlayService).apply {
+                text = "Tap to Minimize"
+                setTextColor(Color.parseColor("#94A3B8"))
+                textSize = 6.5f
+                gravity = Gravity.CENTER
+            }
+            addView(hint)
+
+            setOnClickListener {
+                collapseToMenuBubble()
+            }
         }
     }
 
@@ -902,27 +915,64 @@ class OverlayService : Service() {
         }
     }
 
+    private val markerFadeRunnables = mutableMapOf<View, Runnable>()
+
+    private fun scheduleMarkerFade(view: View, delayMs: Long = 1800L) {
+        markerFadeRunnables[view]?.let { mainHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            view.animate()
+                .alpha(0.28f)
+                .scaleX(0.70f)
+                .scaleY(0.70f)
+                .setDuration(400)
+                .start()
+        }
+        markerFadeRunnables[view] = runnable
+        mainHandler.postDelayed(runnable, delayMs)
+    }
+
+    private fun cancelMarkerFadeAndRestore(view: View) {
+        markerFadeRunnables[view]?.let { mainHandler.removeCallbacks(it) }
+        view.animate()
+            .alpha(1.0f)
+            .scaleX(1.0f)
+            .scaleY(1.0f)
+            .setDuration(150)
+            .start()
+    }
+
     private fun attachMarkerDragListener(view: View, params: WindowManager.LayoutParams) {
         var startX = 0
         var startY = 0
         var touchX = 0f
         var touchY = 0f
+        var isDragging = false
+
+        // Start initial auto-fade timer so new marker fades to subtle dot
+        scheduleMarkerFade(view, 2500L)
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    cancelMarkerFadeAndRestore(view)
                     startX = params.x
                     startY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
+                    isDragging = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (event.rawX - touchX).toInt()
                     val dy = (event.rawY - touchY).toInt()
-                    params.x = startX + dx
-                    params.y = startY + dy
-                    windowManager?.updateViewLayout(view, params)
+                    if (abs(dx) > dp(4) || abs(dy) > dp(4)) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        params.x = startX + dx
+                        params.y = startY + dy
+                        windowManager?.updateViewLayout(view, params)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -931,6 +981,14 @@ class OverlayService : Service() {
                         placedCoordinates[index] = Pair(params.x.toFloat(), params.y.toFloat())
                         onPointCaptured?.invoke(params.x.toFloat(), params.y.toFloat())
                     }
+                    if (view == swipeStartView) {
+                        onPointCaptured?.invoke(params.x.toFloat(), params.y.toFloat())
+                    }
+                    if (view == swipeEndView) {
+                        onPointCaptured?.invoke(params.x.toFloat(), params.y.toFloat())
+                    }
+                    // Auto-fade down to minimal translucent dot after 1.5s
+                    scheduleMarkerFade(view, 1500L)
                     true
                 }
                 else -> false

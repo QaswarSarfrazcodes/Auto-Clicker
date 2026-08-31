@@ -16,6 +16,7 @@ class OnboardingScaffold extends StatelessWidget {
   const OnboardingScaffold({
     super.key,
     required this.activeIndex,
+    this.segmentCount = 4,
     required this.illustrationAsset,
     required this.headline,
     required this.subtext,
@@ -28,6 +29,7 @@ class OnboardingScaffold extends StatelessWidget {
   });
 
   final int activeIndex;
+  final int segmentCount;
   final String illustrationAsset;
   final String headline;
   final String subtext;

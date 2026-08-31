@@ -6,11 +6,16 @@ import '../../../core/constants/app_text_styles.dart';
 import '../common/app_back_header.dart';
 import '../common/app_primary_button.dart';
 import '../common/app_text_button.dart';
+import '../onboarding/onboarding_progress_indicator.dart';
 
-/// The single shared template behind the two permission screens (5 and 6).
+/// The single shared template behind the permission steps in onboarding (Steps 3 and 4).
 class PermissionScaffold extends StatelessWidget {
   const PermissionScaffold({
     super.key,
+    this.activeIndex = 2,
+    this.segmentCount = 4,
+    this.showProgressIndicator = true,
+    this.showBackButton = true,
     required this.icon,
     required this.headline,
     required this.subtext,
@@ -20,6 +25,10 @@ class PermissionScaffold extends StatelessWidget {
     required this.onLinkPressed,
   });
 
+  final int activeIndex;
+  final int segmentCount;
+  final bool showProgressIndicator;
+  final bool showBackButton;
   final Widget icon;
   final String headline;
   final String subtext;
@@ -45,8 +54,23 @@ class PermissionScaffold extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: AppDimensions.permissionBackButtonTop),
-                      const AppBackHeader(),
+                      const SizedBox(height: AppDimensions.onboardingProgressBarTop),
+                      if (showProgressIndicator) ...[
+                        OnboardingProgressIndicator(
+                          activeIndex: activeIndex,
+                          segmentCount: segmentCount,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (showBackButton)
+                        InkWell(
+                          onTap: () => Navigator.of(context).maybePop(),
+                          borderRadius: BorderRadius.circular(20),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.arrow_back_ios_new, size: 18),
+                          ),
+                        ),
                       const SizedBox(height: AppDimensions.permissionIconTop),
                       Center(child: icon),
                       const SizedBox(height: AppDimensions.permissionHeadlineTopGap),

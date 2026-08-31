@@ -10,10 +10,12 @@ import '../../../core/routing/app_route_names.dart';
 import '../../../core/routing/spring_page_route.dart';
 import '../../widgets/common/app_asset_image.dart';
 import '../../widgets/permission/permission_scaffold.dart';
-import 'overlay_permission_screen.dart';
+import '../dashboard/dashboard_screen.dart';
 import '../../../data/datasources/native_automation_channel.dart';
+import '../../../data/datasources/preferences_local_datasource.dart';
 
-/// Screen 5 — "Enable Accessibility Services".
+/// Screen 6 — "Enable Accessibility Services".
+/// Step 4 of 4 onboarding steps (progress index 3).
 class AccessibilityPermissionScreen extends StatefulWidget {
   const AccessibilityPermissionScreen({super.key});
 
@@ -47,19 +49,19 @@ class _AccessibilityPermissionScreenState
 
   Future<void> _checkPermissionAndNavigate() async {
     setState(() => _isChecking = false);
-    // Retry up to 3 times with 1-second gaps.
-    // The AccessibilityService can take 1–3 seconds to bind after the user enables it
-    // in system settings. Without retries the check often returns false immediately
-    // and the user gets stuck on this screen even though they enabled it correctly.
     for (int attempt = 0; attempt < 3; attempt++) {
       final bool granted = await NativeAutomationChannel.isAccessibilityGranted();
       if (granted && mounted) {
-        Navigator.of(context).pushReplacement(
-          SpringPageRoute(
-            settings: const RouteSettings(name: AppRouteNames.overlayPermission),
-            builder: (_) => const OverlayPermissionScreen(),
-          ),
-        );
+        await PreferencesLocalDataSource.instance.setOnboardingComplete(true);
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            SpringPageRoute(
+              settings: const RouteSettings(name: AppRouteNames.dashboard),
+              builder: (_) => const DashboardScreen(),
+            ),
+            (route) => false,
+          );
+        }
         return;
       }
       if (attempt < 2) await Future.delayed(const Duration(seconds: 1));
@@ -79,13 +81,16 @@ class _AccessibilityPermissionScreenState
 
   Future<void> _handleEnable(BuildContext context) async {
     if (!kIsWeb && Platform.isIOS) {
-      // On iOS, navigate directly to next screen / Switch Control instructions
-      Navigator.of(context).pushReplacement(
-        SpringPageRoute(
-          settings: const RouteSettings(name: AppRouteNames.overlayPermission),
-          builder: (_) => const OverlayPermissionScreen(),
-        ),
-      );
+      await PreferencesLocalDataSource.instance.setOnboardingComplete(true);
+      if (context.mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          SpringPageRoute(
+            settings: const RouteSettings(name: AppRouteNames.dashboard),
+            builder: (_) => const DashboardScreen(),
+          ),
+          (route) => false,
+        );
+      }
       return;
     }
 
@@ -117,6 +122,8 @@ class _AccessibilityPermissionScreenState
   @override
   Widget build(BuildContext context) {
     return PermissionScaffold(
+      activeIndex: 3,
+      segmentCount: 4,
       icon: AppAssetImage(
         assetPath: AppAssets.accessibilityPermissionIllustration,
         size: context.scaleUniform(AppDimensions.permissionIconSize),
@@ -125,7 +132,7 @@ class _AccessibilityPermissionScreenState
       ),
       headline: AppStrings.accessibilityHeadline,
       subtext: AppStrings.accessibilitySubtext,
-      primaryLabel: AppStrings.enable,
+      primaryLabel: AppStrings.getStarted,
       onPrimaryPressed: () => _handleEnable(context),
       linkLabel: AppStrings.howItWorks,
       onLinkPressed: () => _handleHowItWorks(context),

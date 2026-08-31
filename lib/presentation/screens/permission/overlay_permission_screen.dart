@@ -10,11 +10,11 @@ import '../../../core/routing/app_route_names.dart';
 import '../../../core/routing/spring_page_route.dart';
 import '../../widgets/common/app_asset_image.dart';
 import '../../widgets/permission/permission_scaffold.dart';
-import '../dashboard/dashboard_screen.dart';
+import 'accessibility_permission_screen.dart';
 import '../../../data/datasources/native_automation_channel.dart';
-import '../../../data/datasources/preferences_local_datasource.dart';
 
-/// Screen 6 — "Allow Display all Over Other Apps".
+/// Screen 5 — "Allow Display all Over Other Apps".
+/// Step 3 of 4 onboarding steps (progress index 2).
 class OverlayPermissionScreen extends StatefulWidget {
   const OverlayPermissionScreen({super.key});
 
@@ -49,18 +49,12 @@ class _OverlayPermissionScreenState extends State<OverlayPermissionScreen>
     setState(() => _isChecking = false);
     final bool granted = await NativeAutomationChannel.isOverlayGranted();
     if (granted && mounted) {
-      // Mark onboarding as complete so splash screen bypasses it next time
-      await PreferencesLocalDataSource.instance.setOnboardingComplete(true);
-
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          SpringPageRoute(
-            settings: const RouteSettings(name: AppRouteNames.dashboard),
-            builder: (_) => const DashboardScreen(),
-          ),
-          (route) => false,
-        );
-      }
+      Navigator.of(context).pushReplacement(
+        SpringPageRoute(
+          settings: const RouteSettings(name: AppRouteNames.accessibilityPermission),
+          builder: (_) => const AccessibilityPermissionScreen(),
+        ),
+      );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -73,14 +67,12 @@ class _OverlayPermissionScreenState extends State<OverlayPermissionScreen>
 
   Future<void> _handleGrantPermission(BuildContext context) async {
     if (!kIsWeb && Platform.isIOS) {
-      await PreferencesLocalDataSource.instance.setOnboardingComplete(true);
       if (context.mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
+        Navigator.of(context).pushReplacement(
           SpringPageRoute(
-            settings: const RouteSettings(name: AppRouteNames.dashboard),
-            builder: (_) => const DashboardScreen(),
+            settings: const RouteSettings(name: AppRouteNames.accessibilityPermission),
+            builder: (_) => const AccessibilityPermissionScreen(),
           ),
-          (route) => false,
         );
       }
       return;
@@ -114,6 +106,8 @@ class _OverlayPermissionScreenState extends State<OverlayPermissionScreen>
   @override
   Widget build(BuildContext context) {
     return PermissionScaffold(
+      activeIndex: 2,
+      segmentCount: 4,
       icon: AppAssetImage(
         assetPath: AppAssets.overlayPermissionIllustration,
         size: context.scaleUniform(AppDimensions.permissionIconSize),

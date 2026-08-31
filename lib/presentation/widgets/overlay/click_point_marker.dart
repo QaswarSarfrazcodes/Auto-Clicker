@@ -65,71 +65,80 @@ class _ClickPointMarkerState extends State<ClickPointMarker> with SingleTickerPr
     return RepaintBoundary(
       child: GestureDetector(
         onTap: widget.onTap,
-        child: SizedBox(
-          width: AppDimensions.overlayMarkerSize + 8,
-          height: AppDimensions.overlayMarkerSize + 8,
-          child: AnimatedBuilder(
-            animation: _scaleAnimation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: widget.selected ? _scaleAnimation.value : 1.0,
-                child: child,
-              );
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: AppDimensions.overlayMarkerSize,
-                  height: AppDimensions.overlayMarkerSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: widget.selected ? Colors.white : AppColors.primaryBlue,
-                      width: widget.selected ? 3 : 2,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity: widget.selected ? 1.0 : 0.45,
+          child: SizedBox(
+            width: AppDimensions.overlayMarkerSize + 8,
+            height: AppDimensions.overlayMarkerSize + 8,
+            child: AnimatedBuilder(
+              animation: _scaleAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: widget.selected ? _scaleAnimation.value : 0.85,
+                  child: child,
+                );
+              },
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: AppDimensions.overlayMarkerSize,
+                    height: AppDimensions.overlayMarkerSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: widget.selected
+                          ? AppColors.primaryBlue.withValues(alpha: 0.15)
+                          : const Color(0x330052FF),
+                      border: Border.all(
+                        color: widget.selected ? Colors.white : AppColors.primaryBlue,
+                        width: widget.selected ? 3 : 1.5,
+                      ),
+                      boxShadow: widget.selected
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withValues(alpha: 0.5),
+                                blurRadius: 8,
+                                spreadRadius: 2,
+                              )
+                            ]
+                          : null,
                     ),
-                    boxShadow: widget.selected ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.5),
-                        blurRadius: 8,
-                        spreadRadius: 2,
-                      )
-                    ] : null,
+                    child: Center(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Center(
+                  Positioned(
+                    top: -2,
+                    right: -2,
                     child: Container(
-                      width: 8,
-                      height: 8,
+                      width: AppDimensions.overlayMarkerBadgeSize,
+                      height: AppDimensions.overlayMarkerBadgeSize,
+                      alignment: Alignment.center,
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.primaryBlue,
                       ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    width: AppDimensions.overlayMarkerBadgeSize,
-                    height: AppDimensions.overlayMarkerBadgeSize,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primaryBlue,
-                    ),
-                    child: Text(
-                      '${widget.index}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                      child: Text(
+                        '${widget.index}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

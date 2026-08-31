@@ -92,7 +92,7 @@ class _OverlaySidebarState extends State<OverlaySidebar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ── Expand / Collapse Mini Grip ──────────────────────────
+                  // ── Expand / Collapse Header Grip ──────────────────────
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.selectionClick();
@@ -107,16 +107,16 @@ class _OverlaySidebarState extends State<OverlaySidebar> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              _isExpanded ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-                              size: 16,
-                              color: const Color(0xFF94A3B8),
+                              _isExpanded ? Icons.unfold_less_rounded : Icons.unfold_more_rounded,
+                              size: 14,
+                              color: const Color(0xFF38BDF8),
                             ),
                             if (_isExpanded) ...[
-                              const SizedBox(width: 2),
+                              const SizedBox(width: 3),
                               const Text(
-                                'TOOLS',
+                                'AUTO ▾',
                                 style: TextStyle(
-                                  color: Color(0xFF64748B),
+                                  color: Color(0xFF38BDF8),
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.8,

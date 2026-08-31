@@ -235,48 +235,119 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   const SizedBox(height: 12),
 
-                  // ── Hero Quick Action Launchers ─────────────────────────
-                  _HeroLaunchCard(
-                    title: 'Social Feed & Reel Auto-Scroll',
-                    subtitle: 'Smart auto-scroll for Facebook, TikTok & Reels with video detection',
-                    badge: 'POPULAR 🎬',
-                    icon: Icons.swipe_vertical_rounded,
-                    gradientColors: const [Color(0xFF4F46E5), Color(0xFF3B82F6)],
-                    buttonLabel: '1-Tap Start Scroll',
-                    onTap: () => _launchQuickReelScroll(context),
-                  ),
+                  // ── Service Status Pill ─────────────────────────────────
+                  _ServiceStatusBanner(),
 
+                  const SizedBox(height: 16),
+
+                  // ── User Intent Hub ("What do you want to automate?") ──
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Automation Modes',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Select an intent',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
 
-                  _HeroLaunchCard(
-                    title: 'Instant Auto-Clicker',
-                    subtitle: 'Fast continuous tapping for games, shopping & form filling',
-                    badge: 'FAST ⚡',
-                    icon: Icons.touch_app_rounded,
-                    gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
-                    buttonLabel: '1-Tap Start Clicker',
-                    onTap: () => _launchQuickClicker(context),
+                  // 2x2 Primary Intent Grid
+                  Row(
+                    children: [
+                      // 1. Social Auto-Scroll
+                      Expanded(
+                        child: _IntentCard(
+                          title: 'Social Auto-Scroll',
+                          subtitle: 'Facebook, TikTok, Reels',
+                          badge: '🎬 Smart Video Hold',
+                          icon: Icons.swipe_vertical_rounded,
+                          gradientColors: const [Color(0xFF4338CA), Color(0xFF6366F1)],
+                          buttonLabel: '1-Tap Start',
+                          onTap: () => _launchQuickReelScroll(context),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // 2. Quick Clicker
+                      Expanded(
+                        child: _IntentCard(
+                          title: 'Quick Clicker',
+                          subtitle: 'Games, Roblox, Shopping',
+                          badge: '🎯 Drops Tap Pin [1]',
+                          icon: Icons.touch_app_rounded,
+                          gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
+                          buttonLabel: '1-Tap Start',
+                          onTap: () => _launchQuickClicker(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // 3. Unified Script Studio
+                      Expanded(
+                        child: _IntentCard(
+                          title: 'Script Studio',
+                          subtitle: 'Multi-Clicks & Swipes',
+                          badge: '🛠️ Tab 1 & Tab 2',
+                          icon: Icons.auto_fix_high_rounded,
+                          gradientColors: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
+                          buttonLabel: 'Open Studio',
+                          onTap: () => _openNewScript(context),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // 4. Fatigue Guard & Settings
+                      Expanded(
+                        child: _IntentCard(
+                          title: 'Fatigue Guard',
+                          subtitle: '15m/30m Breaks & Jitter',
+                          badge: '⚙️ Anti-Detection',
+                          icon: Icons.shield_outlined,
+                          gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
+                          buttonLabel: 'Configure',
+                          onTap: () => _openSettings(context),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: AppDimensions.dashboardSectionGap),
 
-                  // ── Management Grid ─────────────────────────────────────
-                  _ActionGrid(
-                    onNewScript: () => _openNewScript(context),
-                    onSavedScript: () => _openSavedScripts(context),
-                    onImportScript: () => _importScript(context),
-                    onExportScript: () => _exportScript(context),
-                  ),
-
-                  const SizedBox(height: AppDimensions.dashboardSectionGap),
-
-                  const Text(
-                    AppStrings.recentScripts,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                  // ── Recent Scripts / Automation Queue ───────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        AppStrings.recentScripts,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      if (_savedScripts.isNotEmpty)
+                        TextButton(
+                          onPressed: () => _openSavedScripts(context),
+                          child: Text('View All (${_savedScripts.length})'),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
 
@@ -287,7 +358,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: CircularProgressIndicator(color: AppColors.primaryBlue),
                       ),
                     )
-                  else
+                  else if (_savedScripts.isNotEmpty)
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.surfaceWhite,
@@ -297,68 +368,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: Column(
                         children: [
-                          if (recentList.isNotEmpty)
-                            for (int i = 0; i < recentList.length; i++) ...[
-                              if (i > 0)
-                                const Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: AppColors.borderGray,
-                                ),
-                              RecentScriptTile(
-                                iconAssetPath: '',
-                                iconFallback: recentList[i].actionType == 'swipe'
-                                    ? Icons.swipe_rounded
-                                    : (i % 2 == 0
-                                        ? Icons.touch_app_rounded
-                                        : Icons.mouse_rounded),
-                                iconColor: recentList[i].actionType == 'swipe'
-                                    ? const Color(0xFF6366F1)
-                                    : (i % 2 == 0
-                                        ? AppColors.accentPink
-                                        : AppColors.textPrimary),
-                                name: recentList[i].name,
-                                lastUsedLabel: recentList[i].lastRunLabel,
-                                onPlayPressed: () => _runScript(context, recentList[i]),
+                          for (int i = 0; i < recentList.length; i++) ...[
+                            if (i > 0)
+                              const Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: AppColors.borderGray,
                               ),
-                            ]
-                          else
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 32),
-                              child: Column(
-                                children: [
-                                  const Icon(
-                                    Icons.auto_fix_high_rounded,
-                                    size: 48,
-                                    color: AppColors.borderGray,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'No scripts yet',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  TextButton(
-                                    onPressed: () => _openNewScript(context),
-                                    child: const Text('Create your first script →'),
-                                  ),
-                                ],
-                              ),
+                            RecentScriptTile(
+                              iconAssetPath: '',
+                              iconFallback: recentList[i].actionType == 'swipe'
+                                  ? Icons.swipe_rounded
+                                  : (i % 2 == 0
+                                      ? Icons.touch_app_rounded
+                                      : Icons.mouse_rounded),
+                              iconColor: recentList[i].actionType == 'swipe'
+                                  ? const Color(0xFF6366F1)
+                                  : (i % 2 == 0
+                                      ? AppColors.accentPink
+                                      : AppColors.textPrimary),
+                              name: recentList[i].name,
+                              lastUsedLabel: recentList[i].lastRunLabel,
+                              onPlayPressed: () => _runScript(context, recentList[i]),
                             ),
+                          ],
                         ],
                       ),
+                    )
+                  else
+                    // Quick Start Template Presets when empty
+                    _QuickStartPresets(
+                      onSelectPreset: (preset) {
+                        _runScript(context, preset);
+                      },
                     ),
 
                   const SizedBox(height: AppDimensions.dashboardSectionGap),
 
-                  AppPrimaryButton(
-                    label: AppStrings.createNewScript,
-                    onPressed: () => _openNewScript(context),
-                    trailingIcon: Icons.add_circle_outline,
-                    expand: true,
+                  // ── Management Grid (Bottom Utilities) ──────────────────
+                  const Text(
+                    'Script Management',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _ActionGrid(
+                    onNewScript: () => _openNewScript(context),
+                    onSavedScript: () => _openSavedScripts(context),
+                    onImportScript: () => _importScript(context),
+                    onExportScript: () => _exportScript(context),
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -371,9 +432,196 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-/// Rich Hero Card with gradient and labeled icons
-class _HeroLaunchCard extends StatelessWidget {
-  const _HeroLaunchCard({
+/// Service Status Banner showing live readiness
+class _ServiceStatusBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF22C55E),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Automation Service Ready • No Root Required',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF15803D),
+              ),
+            ),
+          ),
+          const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF15803D)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Quick Start Presets shown when user has not saved any scripts yet
+class _QuickStartPresets extends StatelessWidget {
+  const _QuickStartPresets({required this.onSelectPreset});
+
+  final ValueChanged<ScriptEntity> onSelectPreset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderGray),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bolt_rounded, size: 18, color: AppColors.accentOrange),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Quick-Start Automation Presets',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _PresetChip(
+            title: '15m Reels Scroller',
+            desc: 'Auto-swipes every 2.5s with video hold',
+            icon: Icons.play_circle_filled_rounded,
+            color: const Color(0xFF4F46E5),
+            onTap: () {
+              onSelectPreset(
+                ScriptEntity(
+                  id: 'preset_reels',
+                  name: '15m Reels Scroller',
+                  actionType: 'swipe',
+                  intervalValue: 2,
+                  intervalUnit: 'Sec',
+                  repeatType: 'infinite',
+                  repeatCount: 1,
+                  randomDelayEnabled: true,
+                  randomDelayMin: 1,
+                  randomDelayMax: 3,
+                  holdOnVideoEnabled: true,
+                  maxVideoWaitSeconds: 180,
+                  createdAt: DateTime.now(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          _PresetChip(
+            title: 'Rapid 500ms Clicker',
+            desc: 'Fast repetitive click on active point',
+            icon: Icons.touch_app_rounded,
+            color: const Color(0xFF0284C7),
+            onTap: () {
+              onSelectPreset(
+                ScriptEntity(
+                  id: 'preset_clicker',
+                  name: 'Rapid 500ms Clicker',
+                  actionType: 'click',
+                  intervalValue: 500,
+                  intervalUnit: 'ms',
+                  repeatType: 'infinite',
+                  repeatCount: 1,
+                  createdAt: DateTime.now(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({
+    required this.title,
+    required this.desc,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String desc;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    desc,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact Intent Card for 2x2 Grid with high visual aesthetics
+class _IntentCard extends StatelessWidget {
+  const _IntentCard({
     required this.title,
     required this.subtitle,
     required this.badge,
@@ -394,7 +642,7 @@ class _HeroLaunchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: gradientColors,
@@ -405,7 +653,7 @@ class _HeroLaunchCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: gradientColors.first.withValues(alpha: 0.3),
-            blurRadius: 12,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -414,70 +662,80 @@ class _HeroLaunchCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: Colors.white, size: 26),
+                child: Icon(icon, color: Colors.white, size: 20),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      badge,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
-              fontSize: 12.5,
-              height: 1.3,
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 10.5,
+            ),
+          ),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
-            height: 38,
-            child: ElevatedButton.icon(
+            height: 32,
+            child: ElevatedButton(
               onPressed: onTap,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: gradientColors.first,
                 elevation: 0,
+                padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: Text(
+              child: Text(
                 buttonLabel,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11.5,
+                ),
               ),
             ),
           ),

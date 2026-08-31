@@ -10,7 +10,7 @@ class OnboardingProgressIndicator extends StatelessWidget {
   const OnboardingProgressIndicator({
     super.key,
     required this.activeIndex,
-    this.segmentCount = 3,
+    this.segmentCount = 4,
   });
 
   final int activeIndex;
