@@ -1,10 +1,9 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_dimensions.dart';
-import '../../../core/constants/app_strings.dart';
 import '../../../data/datasources/platform/overlay_channel.dart';
 import '../../../domain/entities/script_entity.dart';
 import '../../widgets/forms/app_slider_row.dart';
@@ -34,7 +33,6 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
   StreamSubscription<void>? _doneSub;
 
   double _durationMs = 300;
-
   double _delayMs = 0;
   bool _loopSequence = false;
 
@@ -62,7 +60,6 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
       _animationController.repeat(reverse: false);
     }
 
-    // Swipe picker: first event = start, second = end, then auto-closes
     int pickerTapIndex = 0;
     _pointSub = OverlayChannel.instance.onPointCaptured.listen((coords) {
       if (!_isPickerActive || !mounted) return;
@@ -113,7 +110,6 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
         _endPoint = details.localPosition;
         _animationController.repeat(reverse: false);
       } else {
-        // Reset and start new
         _startPoint = details.localPosition;
         _endPoint = null;
         _animationController.stop();
@@ -134,16 +130,35 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Pick Swipe on Live Screen',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF14142B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.touch_app_rounded, color: AppColors.primaryBlue, size: 24),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Pick Swipe on Live Screen',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         content: const Text(
-          'The app will minimise.\n\n'
-          '1. Go to your target app (Facebook, Camera, game…)\n'
-          '2. Tap where the swipe should START\n'
-          '3. Tap where the swipe should END\n\n'
-          'The picker will close automatically after 2 taps.',
-          style: TextStyle(color: Color(0xFFB0B0C8), height: 1.5),
+          'The app will minimize over your target app (Facebook, TikTok, Game…):\n\n'
+          '1. Tap where swipe should START\n'
+          '2. Tap where swipe should END\n\n'
+          'The picker will finish automatically after 2 taps.',
+          style: TextStyle(color: Color(0xFFC0C0D8), height: 1.5, fontSize: 14),
         ),
         actions: [
           TextButton(
@@ -151,9 +166,12 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
             child: const Text('Cancel', style: TextStyle(color: Color(0xFF8888A8))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Let's Go"),
+            child: const Text("Start Picker", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -196,37 +214,40 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
   void _showSettingsBottomSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surfaceWhite,
+      backgroundColor: const Color(0xFF14142B),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 24,
-                ),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Swipe Settings',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+                    const Row(
+                      children: [
+                        Icon(Icons.tune_rounded, color: AppColors.primaryBlue, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Swipe Parameters',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
                     AppSliderRow(
-                      label: 'Duration (ms)',
+                      label: 'Swipe Duration (ms)',
                       value: _durationMs,
-                      min: 0,
-                      max: 2000,
+                      min: 100,
+                      max: 3000,
                       onChanged: (value) {
                         setModalState(() => _durationMs = value);
                         setState(() => _durationMs = value);
@@ -235,7 +256,7 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
                     ),
                     const SizedBox(height: 16),
                     AppSliderRow(
-                      label: 'Delay (ms)',
+                      label: 'Delay between Swipes (ms)',
                       value: _delayMs,
                       min: 0,
                       max: 5000,
@@ -247,7 +268,10 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
                     ),
                     SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text(AppStrings.loopSequence),
+                      title: const Text(
+                        'Continuous Loop',
+                        style: TextStyle(color: Colors.white, fontSize: 14),
+                      ),
                       value: _loopSequence,
                       onChanged: (value) {
                         setModalState(() => _loopSequence = value);
@@ -268,7 +292,7 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
                           ),
                         ),
                         child: const Text(
-                          'Done',
+                          'Apply Settings',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -321,161 +345,276 @@ class _SwipeParametersScreenState extends State<SwipeParametersScreen>
               ),
             if (_startPoint != null)
               Positioned(
-                left:
-                    _startPoint!.dx - (AppDimensions.overlayMarkerSize + 8) / 2,
-                top:
-                    _startPoint!.dy - (AppDimensions.overlayMarkerSize + 8) / 2,
+                left: _startPoint!.dx - 35,
+                top: _startPoint!.dy - 45,
                 child: GestureDetector(
                   onPanUpdate: (details) {
                     setState(() {
                       _startPoint = _startPoint! + details.delta;
                     });
                   },
-                  child: ClickPointMarker(
-                    index: 1,
-                    selected: false,
-                    onTap: () {},
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(bottom: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xF00052FF),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'START (${_startPoint!.dx.round()}, ${_startPoint!.dy.round()})',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      ClickPointMarker(
+                        index: 1,
+                        selected: false,
+                        onTap: () {},
+                      ),
+                    ],
                   ),
                 ),
               ),
             if (_endPoint != null)
               Positioned(
-                left: _endPoint!.dx - (AppDimensions.overlayMarkerSize + 8) / 2,
-                top: _endPoint!.dy - (AppDimensions.overlayMarkerSize + 8) / 2,
+                left: _endPoint!.dx - 35,
+                top: _endPoint!.dy - 45,
                 child: GestureDetector(
                   onPanUpdate: (details) {
                     setState(() {
                       _endPoint = _endPoint! + details.delta;
                     });
                   },
-                  child: ClickPointMarker(
-                    index: 2,
-                    selected: false,
-                    onTap: () {},
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(bottom: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xF010B981),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'END (${_endPoint!.dx.round()}, ${_endPoint!.dy.round()})',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      ClickPointMarker(
+                        index: 2,
+                        selected: false,
+                        onTap: () {},
+                      ),
+                    ],
                   ),
                 ),
               ),
+
+            // ─── Single Unified Top Glass Header Pill (No Overlapping Text!) ───
+            Positioned(
+              top: 12,
+              left: 76,
+              right: 16,
+              child: _SwipeTopGlassHeader(
+                startPoint: _startPoint,
+                endPoint: _endPoint,
+                isPickerActive: _isPickerActive,
+                onPickLiveScreen: _startLiveScreenPicker,
+                onCancelPicker: () {
+                  setState(() => _isPickerActive = false);
+                  OverlayChannel.instance.stopPointPicker();
+                },
+              ),
+            ),
+
+            // ─── Floating Sidebar ─────────────────────────────────────
             Positioned(
               left: 0,
               top: MediaQuery.of(context).size.height * 0.2,
               child: OverlaySidebar(
                 isSwipeMode: true,
-                onAdd: () {}, // Handled by tapping on canvas
+                onAdd: () {},
                 onRemove: _handleReset,
                 onPlay: () => _handleSave(context),
+                onPickLiveScreen: _startLiveScreenPicker,
                 onClose: () => Navigator.of(context).maybePop(),
                 onSettings: _showSettingsBottomSheet,
               ),
             ),
-            // ─── Live Screen Picker banner ─────────────────────────
-            Positioned(
-              top: 20,
-              left: 80,
-              right: 20,
-              child: _isPickerActive
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unified Top Glass Header Pill for Swipe Screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SwipeTopGlassHeader extends StatelessWidget {
+  const _SwipeTopGlassHeader({
+    required this.startPoint,
+    required this.endPoint,
+    required this.isPickerActive,
+    required this.onPickLiveScreen,
+    required this.onCancelPicker,
+  });
+
+  final Offset? startPoint;
+  final Offset? endPoint;
+  final bool isPickerActive;
+  final VoidCallback onPickLiveScreen;
+  final VoidCallback onCancelPicker;
+
+  @override
+  Widget build(BuildContext context) {
+    String title;
+    String sub;
+
+    if (isPickerActive) {
+      title = 'Live Swipe Picker Active';
+      sub = 'Tap START then END point on target app';
+    } else if (startPoint == null) {
+      title = 'Tap Canvas for START Point';
+      sub = 'Or tap Live App to place on Facebook/apps';
+    } else if (endPoint == null) {
+      title = 'Tap Canvas for END Point';
+      sub = 'Swipe direction line will be drawn';
+    } else {
+      title = 'Swipe Gesture Ready';
+      sub = 'Drag markers or tap Save (✅) to confirm';
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xE614142B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPickerActive
+                  ? const Color(0xFF0052FF)
+                  : Colors.white.withValues(alpha: 0.15),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 15,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.swap_vert_rounded,
+                  color: Color(0xFFA78BFA),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sub,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              if (isPickerActive)
+                GestureDetector(
+                  onTap: onCancelPicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0052FF).withAlpha(220),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: Colors.white70, size: 16),
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: onPickLiveScreen,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                     child: const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.touch_app_rounded, color: Colors.white, size: 18),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Tap START then END on your target app',
-                            style: TextStyle(color: Colors.white, fontSize: 13),
+                        Icon(Icons.smartphone_rounded,
+                            color: Colors.white, size: 13),
+                        SizedBox(width: 4),
+                        Text(
+                          'Live App',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
-                  )
-                : GestureDetector(
-                    onTap: _startLiveScreenPicker,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A2E).withAlpha(200),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.primaryBlue.withAlpha(128)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.smartphone_rounded, color: AppColors.primaryBlue, size: 18),
-                          SizedBox(width: 8),
-                          Text(
-                            '📍 Pick on Live Screen',
-                            style: TextStyle(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-            ),
-            Positioned(
-              right: 20,
-              bottom: 20,
-              child: TextButton(
-                onPressed: () => _handleSave(context),
-                child: const Text(AppStrings.saveChanges),
-              ),
-            ),
-            if (_startPoint == null)
-              Positioned(
-                top: AppDimensions.overlayBannerTop,
-                left: 20,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Tap anywhere to place the Start point',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
-              )
-            else if (_endPoint == null)
-              Positioned(
-                top: AppDimensions.overlayBannerTop,
-                left: 20,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.successGreen.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Tap again to place the End point',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

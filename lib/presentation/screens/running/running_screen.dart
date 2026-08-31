@@ -4,14 +4,21 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/constants/session_fatigue_presets.dart';
+import '../../../data/datasources/fatigue_preferences_datasource.dart';
 import '../../../data/datasources/native_automation_channel.dart';
 import '../../../data/datasources/platform/notification_permission_service.dart';
 import '../../../data/datasources/platform/overlay_channel.dart';
 import '../../../data/datasources/script_local_datasource.dart';
+import '../../../domain/engines/session_fatigue_guard.dart';
 import '../../../domain/entities/script_entity.dart';
+import '../../../domain/entities/session_fatigue_config.dart';
+
 import '../../../domain/usecases/execute_script_usecase.dart';
 import '../../widgets/common/app_primary_button.dart';
 import '../../widgets/common/app_text_button.dart';
+import '../../widgets/execution/continue_or_stop_dialog.dart';
+import '../../widgets/running/fatigue_sidebar.dart';
 import '../../widgets/running/running_stat_card.dart';
 import '../../widgets/running/running_status_indicator.dart';
 
@@ -31,15 +38,24 @@ class RunningScreen extends StatefulWidget {
 }
 
 class _RunningScreenState extends State<RunningScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _scriptNameController = TextEditingController();
   final TextEditingController _speedController = TextEditingController();
 
   ExecuteScriptUseCase? _useCase;
+  SessionFatigueGuard? _fatigueGuard;
   late ScriptEntity _activeScript;
   bool _isPaused = false;
   int _clicks = 0;
   Duration _runtime = Duration.zero;
   StreamSubscription<void>? _emergencyStopSubscription;
+  Timer? _fatigueTickTimer;
+  Timer? _sidebarAutoOpenTimer;
+
+  SessionFatigueConfig _fatigueConfig = SessionFatigueConfig.defaultConfig;
+  ActionMode _actionMode = ActionMode.autoClick;
+
+  bool _continueDialogShown = false;
 
   @override
   void initState() {
@@ -81,13 +97,87 @@ class _RunningScreenState extends State<RunningScreen> {
       },
     );
 
-    _initExecution();
+    _loadFatigueConfig().then((_) => _initExecution());
+  }
+
+  /// Loads saved fatigue config from SharedPreferences before starting.
+  Future<void> _loadFatigueConfig() async {
+    final ds = FatiguePreferencesDataSource.instance;
+    final presetIndex = await ds.getFatiguePresetIndex();
+    final customMinutes = await ds.getCustomFatigueLimitMinutes();
+    final graceMinutes = await ds.getGraceWindowMinutes();
+
+    final preset = SessionFatiguePreset.values[presetIndex.clamp(
+      0,
+      SessionFatiguePreset.values.length - 1,
+    )];
+
+    if (mounted) {
+      setState(() {
+        _fatigueConfig = SessionFatigueConfig(
+          preset: preset,
+          customLimit: customMinutes != null
+              ? Duration(minutes: customMinutes)
+              : null,
+          graceWindow: Duration(minutes: graceMinutes),
+        );
+      });
+    }
+  }
+
+  void _buildFatigueGuard() {
+    _fatigueGuard?.dispose();
+    _fatigueTickTimer?.cancel();
+
+    if (!_fatigueConfig.isEnabled) {
+      _fatigueGuard = null;
+      return;
+    }
+
+    _fatigueGuard = SessionFatigueGuard(
+      config: _fatigueConfig,
+      onLimitReached: _onFatigueLimitReached,
+      onGraceExpired: _onFatigueGraceExpired,
+    );
+
+    // Drive the guard with a 1-second tick (matching existing exec timer).
+    _fatigueTickTimer = Timer.periodic(kFatigueGuardTickSize, (_) {
+      if (!_isPaused) {
+        _fatigueGuard?.onTick(kFatigueGuardTickSize);
+      }
+    });
+  }
+
+  void _onFatigueLimitReached() {
+    if (!mounted || _continueDialogShown) return;
+    _continueDialogShown = true;
+    _useCase?.pause();
+    setState(() => _isPaused = true);
+    OverlayChannel.instance.update(isRunning: false, clickCount: _clicks);
+
+    ContinueOrStopDialog.show(
+      context,
+      scriptName: _activeScript.name,
+      config: _fatigueConfig,
+      onContinue: _onFatigueContinue,
+      onStop: _stop,
+    ).then((_) => _continueDialogShown = false);
+  }
+
+  void _onFatigueGraceExpired() {
+    if (mounted) _stop();
+  }
+
+  void _onFatigueContinue() {
+    if (!mounted) return;
+    _fatigueGuard?.resumeCheckIn();
+    _useCase?.resume();
+    setState(() => _isPaused = false);
+    OverlayChannel.instance.update(isRunning: true, clickCount: _clicks);
   }
 
   Future<void> _initExecution() async {
     // Pre-flight check: ensure accessibility is granted before touching any service.
-    // Without this, dispatchGesture fails silently and the script exits immediately
-    // with zero user feedback. Now shows a clear actionable dialog instead.
     final bool accessGranted = await NativeAutomationChannel.isAccessibilityGranted();
     if (!accessGranted && mounted) {
       await showDialog(
@@ -139,6 +229,9 @@ class _RunningScreenState extends State<RunningScreen> {
     await OverlayChannel.instance.show();
     await OverlayChannel.instance.update(isRunning: true, clickCount: 0);
 
+    // Build and start the fatigue guard
+    _buildFatigueGuard();
+
     if (!mounted) return;
     _useCase!.start(
       onTick: (clicks, seconds) {
@@ -161,6 +254,13 @@ class _RunningScreenState extends State<RunningScreen> {
         }
       },
     );
+
+    // ── Auto-open sidebar after 600ms so user sees execution starting ──────
+    _sidebarAutoOpenTimer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        _scaffoldKey.currentState?.openDrawer();
+      }
+    });
   }
 
   void _togglePause() {
@@ -177,6 +277,8 @@ class _RunningScreenState extends State<RunningScreen> {
   }
 
   void _cleanupServices() {
+    _fatigueGuard?.dispose();
+    _fatigueTickTimer?.cancel();
     OverlayChannel.instance.hide();
     NativeAutomationChannel.stopForegroundService();
   }
@@ -224,6 +326,9 @@ class _RunningScreenState extends State<RunningScreen> {
   @override
   void dispose() {
     _emergencyStopSubscription?.cancel();
+    _sidebarAutoOpenTimer?.cancel();
+    _fatigueGuard?.dispose();
+    _fatigueTickTimer?.cancel();
     _useCase?.stop();
     _cleanupServices();
     _scriptNameController.dispose();
@@ -234,7 +339,59 @@ class _RunningScreenState extends State<RunningScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.surfaceWhite,
+      // ── Premium glassmorphism sidebar drawer ────────────────────────────────
+      drawer: FatigueSidebar(
+        scriptName: _activeScript.name,
+        clicks: _clicks,
+        runtime: _runtime,
+        isPaused: _isPaused,
+        initialConfig: _fatigueConfig,
+        actionMode: _actionMode,
+        intervalValue: _activeScript.intervalValue,
+        intervalUnit: _activeScript.intervalUnit,
+        fatigueElapsed: _fatigueGuard?.elapsed ?? _runtime,
+        scrollConfig: _activeScript.swipeConfig != null
+            ? ScrollCoordConfig(
+                direction: ScrollDirection.down,
+                startX: _activeScript.swipeConfig!.startX,
+                startY: _activeScript.swipeConfig!.startY,
+                endX: _activeScript.swipeConfig!.endX,
+                endY: _activeScript.swipeConfig!.endY,
+                durationMs: _activeScript.swipeConfig!.durationMs,
+              )
+            : null,
+        onConfigChanged: (newConfig) {
+          setState(() => _fatigueConfig = newConfig);
+          _buildFatigueGuard();
+        },
+        onActionModeChanged: (mode) {
+          setState(() => _actionMode = mode);
+        },
+        onSpeedChanged: (value, unit) {
+          setState(() {
+            _activeScript = _activeScript.copyWith(
+              intervalValue: value,
+              intervalUnit: unit,
+            );
+            _speedController.text = '$value $unit';
+          });
+        },
+        onScrollConfigChanged: (sc) {
+          setState(() {
+            _activeScript = _activeScript.copyWith(
+              swipeConfig: SwipeConfigEntity(
+                startX: sc.startX,
+                startY: sc.startY,
+                endX: sc.endX,
+                endY: sc.endY,
+                durationMs: sc.durationMs,
+              ),
+            );
+          });
+        },
+      ),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: context.scaleW(28)),
@@ -242,11 +399,49 @@ class _RunningScreenState extends State<RunningScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(height: context.scaleH(20)),
-              RunningStatusIndicator(
-                label: _isPaused ? 'Paused' : AppStrings.runningStatus,
-                color: _isPaused
-                    ? AppColors.pauseAmber
-                    : AppColors.successGreen,
+              // ── Top bar: status + sidebar toggle ────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: RunningStatusIndicator(
+                      label: _isPaused ? 'Paused' : AppStrings.runningStatus,
+                      color: _isPaused
+                          ? AppColors.pauseAmber
+                          : AppColors.successGreen,
+                    ),
+                  ),
+                  // Sidebar toggle button
+                  GestureDetector(
+                    onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.borderGray),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.tune_rounded,
+                            size: 18,
+                            color: AppColors.primaryBlue,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Settings',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: context.scaleH(20)),
               _RunningDetailCard(
@@ -303,6 +498,11 @@ class _RunningScreenState extends State<RunningScreen> {
                   ),
                 ),
               ),
+              // Fatigue timer indicator (when enabled)
+              if (_fatigueConfig.isEnabled) ...[
+                SizedBox(height: context.scaleH(12)),
+                _FatigueTimerBadge(config: _fatigueConfig),
+              ],
               SizedBox(height: context.scaleH(24)),
               // ─── 2-state Pause/Resume + Stop buttons ─────────────────────────────
               Row(
@@ -362,6 +562,62 @@ class _RunningScreenState extends State<RunningScreen> {
     return buffer.toString();
   }
 }
+
+// ─── Fatigue timer badge ──────────────────────────────────────────────────────
+
+class _FatigueTimerBadge extends StatelessWidget {
+  const _FatigueTimerBadge({required this.config});
+  final SessionFatigueConfig config;
+
+  String get _limitLabel {
+    final limit = config.effectiveLimit;
+    if (limit == null) return '';
+    final mins = limit.inMinutes;
+    if (mins >= 60) {
+      final h = mins ~/ 60;
+      final m = mins % 60;
+      return m == 0
+          ? 'Auto-pause in $h hour${h > 1 ? "s" : ""}'
+          : 'Auto-pause in ${h}h ${m}m';
+    }
+    return 'Auto-pause in $mins min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.timer_outlined,
+            size: 14,
+            color: AppColors.primaryBlue,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _limitLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── RunningDetailCard (unchanged) ───────────────────────────────────────────
 
 class _RunningDetailCard extends StatelessWidget {
   const _RunningDetailCard({

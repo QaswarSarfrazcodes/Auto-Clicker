@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
-import '../../../core/constants/app_strings.dart';
 import '../../../data/datasources/platform/overlay_channel.dart';
 import '../../../domain/entities/script_entity.dart';
 import '../../widgets/overlay/click_point_editor_card.dart';
@@ -16,8 +16,8 @@ import '../../widgets/overlay/overlay_sidebar.dart';
 ///
 /// Supports two placement modes:
 ///  1. Canvas tap — tap the dot-grid canvas to place a point.
-///  2. Live-screen picker — minimise the app, tap directly on the target app,
-///     and physical coordinates are converted to standard logical points.
+///  2. Live-screen picker — minimise the app, tap directly on target app (Facebook, Instagram, games…),
+///     and physical coordinates are captured as logical points.
 class PlaceClickPointsScreen extends StatefulWidget {
   const PlaceClickPointsScreen({super.key, this.initialPoints = const []});
 
@@ -84,15 +84,34 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Pick on Live Screen',
-            style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF14142B),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.touch_app_rounded, color: AppColors.primaryBlue, size: 24),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Pick on Live Screen',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         content: const Text(
-          'The app will minimise.\n\n'
-          '1. Go to your target app (Facebook, Camera, game…)\n'
-          '2. Tap where you want each auto-click to land\n'
-          '3. Tap ✅ Done on the floating toolbar when finished.',
-          style: TextStyle(color: Color(0xFFB0B0C8), height: 1.5),
+          'The app will minimize over target app (Facebook, Game, TikTok…):\n\n'
+          '1. Tap anywhere on target app to add click points\n'
+          '2. Tap ✅ Done on the floating bar when finished.',
+          style: TextStyle(color: Color(0xFFC0C0D8), height: 1.5, fontSize: 14),
         ),
         actions: [
           TextButton(
@@ -102,9 +121,10 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Let's Go"),
+            child: const Text("Start Picker", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -225,7 +245,7 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
             for (int i = 0; i < _points.length; i++)
               Positioned(
                 left: _points[i].x - (AppDimensions.overlayMarkerSize + 8) / 2,
-                top: _points[i].y - (AppDimensions.overlayMarkerSize + 8) / 2,
+                top: _points[i].y - (_selectedIndex == i ? 50 : (AppDimensions.overlayMarkerSize + 8) / 2),
                 child: GestureDetector(
                   onPanUpdate: (details) {
                     setState(() {
@@ -238,34 +258,67 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
                       _selectedIndex = i;
                     });
                   },
-                  child: ClickPointMarker(
-                    index: i + 1,
-                    selected: _selectedIndex == i,
-                    onTap: () => _selectPoint(i),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedIndex == i)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          margin: const EdgeInsets.only(bottom: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xF014142B),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.primaryBlue),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            'X: ${_points[i].x.round()}, Y: ${_points[i].y.round()}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ClickPointMarker(
+                        index: i + 1,
+                        selected: _selectedIndex == i,
+                        onTap: () => _selectPoint(i),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-            // ─── Live Screen Picker Button ─────────────────────────────
+            // ─── Single Clean Top Glass Header Pill ─────────────────────
             Positioned(
-              top: 16,
-              left: 80,
-              right: 20,
-              child: _LivePickerBanner(
-                isActive: _isPickerActive,
+              top: 12,
+              left: 76,
+              right: 16,
+              child: _TopGlassHeader(
+                pointCount: _points.length,
+                isPickerActive: _isPickerActive,
                 onPickLiveScreen: _startLiveScreenPicker,
                 onCancelPicker: _stopPicker,
               ),
             ),
 
+            // ─── Floating Sidebar ─────────────────────────────────────
             Positioned(
               left: 0,
               top: MediaQuery.of(context).size.height * 0.2,
               child: OverlaySidebar(
                 isSwipeMode: false,
+                pointCount: _points.length,
                 onAdd: _addPointInCenter,
                 onRemove: _deleteSelectedPoint,
                 onPlay: _applyAndSave,
+                onPickLiveScreen: _startLiveScreenPicker,
                 onClose: () => Navigator.of(context).maybePop(),
                 onSettings: () {
                   if (_points.isNotEmpty) {
@@ -274,21 +327,6 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
                 },
               ),
             ),
-
-            if (_points.isEmpty)
-              const Positioned(
-                top: AppDimensions.overlayBannerTop,
-                left: 88,
-                right: 20,
-                child: Text(
-                  AppStrings.tapAnywhereToPlaceClickPoints,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
 
             if (selected != null)
               Positioned(
@@ -313,71 +351,157 @@ class _PlaceClickPointsScreenState extends State<PlaceClickPointsScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Live Picker Banner Widget
+// Unified Top Glass Header Widget (Fixes all text overlapping!)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _LivePickerBanner extends StatelessWidget {
-  const _LivePickerBanner({
-    required this.isActive,
+class _TopGlassHeader extends StatelessWidget {
+  const _TopGlassHeader({
+    required this.pointCount,
+    required this.isPickerActive,
     required this.onPickLiveScreen,
     required this.onCancelPicker,
   });
 
-  final bool isActive;
+  final int pointCount;
+  final bool isPickerActive;
   final VoidCallback onPickLiveScreen;
   final VoidCallback onCancelPicker;
 
   @override
   Widget build(BuildContext context) {
-    if (isActive) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0052FF).withAlpha(220),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.touch_app_rounded, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Picker active — tap on your target app',
-                style: TextStyle(color: Colors.white, fontSize: 13),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xE614142B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPickerActive
+                  ? const Color(0xFF0052FF)
+                  : Colors.white.withValues(alpha: 0.15),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 15,
+                spreadRadius: 1,
               ),
-            ),
-            GestureDetector(
-              onTap: onCancelPicker,
-              child: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
-            ),
-          ],
-        ),
-      );
-    }
+            ],
+          ),
+          child: Row(
+            children: [
+              // Icon + title
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isPickerActive
+                      ? const Color(0xFF0052FF).withValues(alpha: 0.2)
+                      : AppColors.primaryBlue.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPickerActive
+                      ? Icons.touch_app_rounded
+                      : Icons.ads_click_rounded,
+                  color: isPickerActive
+                      ? const Color(0xFF38BDF8)
+                      : AppColors.primaryBlue,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isPickerActive
+                          ? 'Picker Mode Active'
+                          : pointCount == 0
+                              ? 'Tap Grid to Place Points'
+                              : '$pointCount Point${pointCount > 1 ? "s" : ""} Placed',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isPickerActive
+                          ? 'Tap directly on target app (Facebook…)'
+                          : 'Drag points or pick directly on live app',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
 
-    return GestureDetector(
-      onTap: onPickLiveScreen,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E).withAlpha(200),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primaryBlue.withAlpha(128)),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.smartphone_rounded, color: AppColors.primaryBlue, size: 18),
-            SizedBox(width: 8),
-            Text(
-              '📍 Pick on Live Screen',
-              style: TextStyle(
-                color: AppColors.primaryBlue,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
+              // Action button
+              if (isPickerActive)
+                GestureDetector(
+                  onTap: onCancelPicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: Colors.white70, size: 16),
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: onPickLiveScreen,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2380FD), Color(0xFF1032A8)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.smartphone_rounded,
+                            color: Colors.white, size: 13),
+                        SizedBox(width: 4),
+                        Text(
+                          'Live App',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

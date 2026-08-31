@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:auto_clicker/core/constants/app_strings.dart';
 import 'package:auto_clicker/presentation/screens/click_points/place_click_points_screen.dart';
 import 'package:auto_clicker/presentation/screens/swipe_parameters/swipe_parameters_screen.dart';
 
@@ -13,7 +12,7 @@ void main() {
       ),
     );
 
-    expect(find.text(AppStrings.tapAnywhereToPlaceClickPoints), findsOneWidget);
+    expect(find.text('Tap Grid to Place Points'), findsOneWidget);
   });
 
   testWidgets('TC_SWP_01: Swipe Parameters screen renders default input controls', (tester) async {
@@ -23,8 +22,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Tap anywhere to place the Start point'), findsOneWidget);
-    expect(find.text(AppStrings.saveChanges), findsOneWidget);
+    expect(find.text('Tap Canvas for START Point'), findsOneWidget);
   });
 
   testWidgets('TC_SWP_02: tapping canvas places start and end points', (tester) async {
@@ -34,13 +32,13 @@ void main() {
       ),
     );
 
-    expect(find.text('Tap anywhere to place the Start point'), findsOneWidget);
+    expect(find.text('Tap Canvas for START Point'), findsOneWidget);
     await tester.tapAt(const Offset(200, 300));
     await tester.pump();
-    expect(find.text('Tap again to place the End point'), findsOneWidget);
+    expect(find.text('Tap Canvas for END Point'), findsOneWidget);
 
     await tester.tapAt(const Offset(300, 500));
     await tester.pump();
-    expect(find.text('Tap again to place the End point'), findsNothing);
+    expect(find.text('Swipe Gesture Ready'), findsOneWidget);
   });
 }

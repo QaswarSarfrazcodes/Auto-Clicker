@@ -68,6 +68,25 @@
             </intent-filter>
         </receiver>
 
+        <!-- Session Fatigue Notification Action Receiver (Feature A) -->
+        <!-- No new permission required — reuses existing POST_NOTIFICATIONS. -->
+        <receiver
+            android:name=".receiver.FatigueNotificationActionReceiver"
+            android:exported="false" />
+
+        <!-- Feature B — Video-Aware Scroll Hold (Signal 1: MediaSession) -->
+        <!-- User grants "Notification Access" once in System Settings.      -->
+        <!-- If never granted: service is never bound, sharedInstance==null, -->
+        <!-- engine gracefully falls through to Signal 2/3 (FR-B5).         -->
+        <service
+            android:name=".service.MediaPlaybackListenerService"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

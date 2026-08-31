@@ -6,7 +6,10 @@ import android.content.Intent
 import android.graphics.Path
 import android.os.Build
 import android.util.Log
+import android.util.DisplayMetrics
 import android.view.accessibility.AccessibilityEvent
+import com.example.auto_clicker.accessibility.VideoSurfaceDetector
+import com.example.auto_clicker.media.AudioPlaybackConfigWatcher
 
 class AutoClickerService : AccessibilityService() {
 
@@ -139,4 +142,62 @@ class AutoClickerService : AccessibilityService() {
             callback?.invoke(false)
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Feature B — Video-Aware Scroll Hold
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns true if a video is currently playing on screen.
+     *
+     * Signal cascade:
+     *   Signal 1 — MediaSession PlaybackState (authoritative OS media session)
+     *   Signal 2 — Accessibility node tree (VideoSurfaceDetector with 25% threshold)
+     *   Signal 3 — AudioPlaybackConfiguration (active USAGE_MEDIA audio confirmation)
+     */
+    fun queryVideoPlayback(foregroundPackage: String = ""): Boolean {
+        val activePkg = if (foregroundPackage.isNotEmpty()) {
+            foregroundPackage
+        } else {
+            rootInActiveWindow?.packageName?.toString() ?: ""
+        }
+
+        // Signal 1 — MediaSession Playback State
+        val listenerService = MediaPlaybackListenerService.sharedInstance
+        if (listenerService != null && listenerService.queryIsVideoPlaying(activePkg)) {
+            Log.d(TAG, "Video detected via Signal 1 (MediaSession) for $activePkg")
+            return true
+        }
+
+        // Signal 3 — Audio Playback (Active media audio output)
+        val audioWatcher = AudioPlaybackConfigWatcher(applicationContext)
+        val isAudioPlaying = audioWatcher.isAnyMediaAudioActive()
+
+        // Signal 2 — Accessibility node tree surface detection
+        val root = rootInActiveWindow
+        if (root != null) {
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            val display = windowManager?.defaultDisplay
+            display?.getMetrics(metrics)
+            val screenArea = metrics.widthPixels * metrics.heightPixels
+
+            val hasSurface = VideoSurfaceDetector.findLikelyVideoSurface(root, screenArea, 0.25f)
+            if (hasSurface && isAudioPlaying) {
+                Log.d(TAG, "Video detected via Signal 2+3 (surface + active audio) for $activePkg")
+                return true
+            }
+        }
+
+        // Corroboration: Active media audio while on a known video app (Facebook/YouTube/TikTok)
+        if (isAudioPlaying && (activePkg.contains("facebook") || activePkg.contains("instagram") || activePkg.contains("youtube") || activePkg.contains("tiktok") || activePkg.isEmpty())) {
+            Log.d(TAG, "Video detected via Signal 3 (Active Media Audio in video app) for $activePkg")
+            return true
+        }
+
+        return false
+    }
+
+    private val windowManager: android.view.WindowManager?
+        get() = getSystemService(WINDOW_SERVICE) as? android.view.WindowManager
 }

@@ -89,6 +89,9 @@ class ScriptEntity {
     this.swipeConfig,
     DateTime? createdAt,
     this.lastRunAt,
+    // Feature B — Video-Aware Scroll Hold
+    this.holdOnVideoEnabled = false,
+    this.maxVideoWaitSeconds = 180,
   }) : createdAt = createdAt ?? DateTime.now();
 
   final String id;
@@ -106,6 +109,16 @@ class ScriptEntity {
   final DateTime createdAt;
   /// When this script was last started. Null if never run.
   final DateTime? lastRunAt;
+
+  // Feature B — Video-Aware Scroll Hold fields
+  /// When true, the engine holds the next scroll while a video is playing.
+  final bool holdOnVideoEnabled;
+  /// Maximum seconds to wait for a video to end before forcing the scroll.
+  /// Default 180s (3 min) — the hard safety valve from solution.md §2.
+  final int maxVideoWaitSeconds;
+
+  /// Convenience getter: [maxVideoWaitSeconds] as a [Duration].
+  Duration get maxVideoWaitDuration => Duration(seconds: maxVideoWaitSeconds);
 
   /// Human-readable relative time since [lastRunAt] (e.g. "3h ago", "Never run").
   String get lastRunLabel {
@@ -132,6 +145,9 @@ class ScriptEntity {
         'swipeConfig': swipeConfig?.toJson(),
         'createdAt': createdAt.toIso8601String(),
         'lastRunAt': lastRunAt?.toIso8601String(),
+        // Feature B
+        'holdOnVideoEnabled': holdOnVideoEnabled,
+        'maxVideoWaitSeconds': maxVideoWaitSeconds,
       };
 
   factory ScriptEntity.fromJson(Map<String, dynamic> json) => ScriptEntity(
@@ -159,6 +175,9 @@ class ScriptEntity {
         lastRunAt: json['lastRunAt'] != null
             ? DateTime.tryParse(json['lastRunAt'] as String)
             : null,
+        // Feature B — default false/180 keeps old scripts working unchanged
+        holdOnVideoEnabled: json['holdOnVideoEnabled'] as bool? ?? false,
+        maxVideoWaitSeconds: json['maxVideoWaitSeconds'] as int? ?? 180,
       );
 
   ScriptEntity copyWith({
@@ -176,6 +195,9 @@ class ScriptEntity {
     SwipeConfigEntity? swipeConfig,
     DateTime? createdAt,
     DateTime? lastRunAt,
+    // Feature B
+    bool? holdOnVideoEnabled,
+    int? maxVideoWaitSeconds,
   }) =>
       ScriptEntity(
         id: id ?? this.id,
@@ -192,6 +214,8 @@ class ScriptEntity {
         swipeConfig: swipeConfig ?? this.swipeConfig,
         createdAt: createdAt ?? this.createdAt,
         lastRunAt: lastRunAt ?? this.lastRunAt,
+        holdOnVideoEnabled: holdOnVideoEnabled ?? this.holdOnVideoEnabled,
+        maxVideoWaitSeconds: maxVideoWaitSeconds ?? this.maxVideoWaitSeconds,
       );
 
   String encodeJson() => jsonEncode(toJson());

@@ -98,24 +98,26 @@ class _SplashBrandColumn extends StatelessWidget {
           width: 96,
           height: 96,
           decoration: BoxDecoration(
-            color: const Color(0xFF1E80FF),
-            borderRadius: BorderRadius.circular(22),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 16,
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
+          clipBehavior: Clip.antiAlias,
           child: Center(
             child: Image.asset(
               AppAssets.splashAppIcon,
-              width: 54,
-              height: 54,
+              width: 72,
+              height: 72,
+              fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.ads_click_rounded,
-                color: Colors.white,
+                Icons.touch_app_rounded,
+                color: Color(0xFF0052FF),
                 size: 54,
               ),
             ),

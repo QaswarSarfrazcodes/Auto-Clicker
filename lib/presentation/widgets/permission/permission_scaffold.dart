@@ -8,8 +8,6 @@ import '../common/app_primary_button.dart';
 import '../common/app_text_button.dart';
 
 /// The single shared template behind the two permission screens (5 and 6).
-/// Each screen only supplies its icon/illustration, copy, and button
-/// behavior — the layout itself lives here exactly once.
 class PermissionScaffold extends StatelessWidget {
   const PermissionScaffold({
     super.key,
@@ -35,45 +33,55 @@ class PermissionScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.surfaceWhite,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.permissionHorizontalPadding,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppDimensions.permissionBackButtonTop),
-              const AppBackHeader(),
-              const SizedBox(height: AppDimensions.permissionIconTop),
-              Center(child: icon),
-              const SizedBox(height: AppDimensions.permissionHeadlineTopGap),
-              Text(
-                headline,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.onboardingHeadline,
-              ).withFullWidth(),
-              const SizedBox(height: AppDimensions.permissionSubtextTopGap),
-              Text(
-                subtext,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.onboardingSubtext,
-              ).withFullWidth(),
-              const Spacer(),
-              AppPrimaryButton(
-                label: primaryLabel,
-                onPressed: onPrimaryPressed,
-                expand: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.permissionHorizontalPadding,
               ),
-              const SizedBox(height: AppDimensions.permissionLinkTopGap),
-              Center(
-                child: AppTextButton(
-                  label: linkLabel,
-                  onPressed: onLinkPressed,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: AppDimensions.permissionBackButtonTop),
+                      const AppBackHeader(),
+                      const SizedBox(height: AppDimensions.permissionIconTop),
+                      Center(child: icon),
+                      const SizedBox(height: AppDimensions.permissionHeadlineTopGap),
+                      Text(
+                        headline,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.onboardingHeadline,
+                      ).withFullWidth(),
+                      const SizedBox(height: AppDimensions.permissionSubtextTopGap),
+                      Text(
+                        subtext,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.onboardingSubtext,
+                      ).withFullWidth(),
+                      const Spacer(),
+                      const SizedBox(height: 16),
+                      AppPrimaryButton(
+                        label: primaryLabel,
+                        onPressed: onPrimaryPressed,
+                        expand: true,
+                      ),
+                      const SizedBox(height: AppDimensions.permissionLinkTopGap),
+                      Center(
+                        child: AppTextButton(
+                          label: linkLabel,
+                          onPressed: onLinkPressed,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.permissionButtonBottom),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: AppDimensions.permissionButtonBottom),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

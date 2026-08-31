@@ -37,7 +37,7 @@ enum _RepeatMode { infinite, custom }
 class _CreateScriptScreenState extends State<CreateScriptScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _intervalController = TextEditingController(
-    text: '2',
+    text: '500',
   );
   final TextEditingController _customCountController = TextEditingController();
   final TextEditingController _minDelayController = TextEditingController(
@@ -46,11 +46,17 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
   final TextEditingController _maxDelayController = TextEditingController(
     text: '3',
   );
+  // Feature B — Video-Aware Scroll Hold
+  final TextEditingController _maxVideoWaitController = TextEditingController(
+    text: '180',
+  );
 
   _ActionType _actionType = _ActionType.click;
   _RepeatMode _repeatMode = _RepeatMode.infinite;
-  String _intervalUnit = 'Sec';
+  String _intervalUnit = 'ms';
   bool _randomDelayEnabled = true;
+  // Feature B
+  bool _holdOnVideoEnabled = false;
 
   // Track the configuration states across screens to prevent dropping parameters
   List<ClickPointEntity> _clickPoints = [];
@@ -79,6 +85,9 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
       _maxDelayController.text = e.randomDelayMax.toString();
       _clickPoints = List.from(e.clickPoints);
       _swipeConfig = e.swipeConfig;
+      // Feature B — pre-fill when editing an existing script
+      _holdOnVideoEnabled = e.holdOnVideoEnabled;
+      _maxVideoWaitController.text = e.maxVideoWaitSeconds.toString();
     }
   }
 
@@ -89,6 +98,7 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
     _customCountController.dispose();
     _minDelayController.dispose();
     _maxDelayController.dispose();
+    _maxVideoWaitController.dispose(); // Feature B
     super.dispose();
   }
 
@@ -134,6 +144,8 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
     final repeatCount = int.tryParse(_customCountController.text) ?? 10;
     final minDelay = int.tryParse(_minDelayController.text) ?? 1;
     final maxDelay = int.tryParse(_maxDelayController.text) ?? 3;
+    // Feature B
+    final maxVideoWait = int.tryParse(_maxVideoWaitController.text) ?? 180;
 
     // Edit mode: preserve the original ID; create mode: generate a new one.
     final script = ScriptEntity(
@@ -152,6 +164,9 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
       clickPoints: _clickPoints,
       swipeConfig: _swipeConfig,
       createdAt: _isEditing ? widget.editScript!.createdAt : DateTime.now(),
+      // Feature B
+      holdOnVideoEnabled: _holdOnVideoEnabled,
+      maxVideoWaitSeconds: maxVideoWait.clamp(10, 600),
     );
 
     final validation = ScriptValidator.validateEntity(script);
@@ -377,6 +392,46 @@ class _CreateScriptScreenState extends State<CreateScriptScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ],
+                      const SizedBox(height: AppDimensions.formSectionGap),
+                      // --------------------------------------------------------
+                      // Feature B — Video-Aware Scroll Hold
+                      // --------------------------------------------------------
+                      AppToggleRow(
+                        label: 'Hold scroll during videos',
+                        value: _holdOnVideoEnabled,
+                        onChanged: (v) =>
+                            setState(() => _holdOnVideoEnabled = v),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Pause auto-scroll when a video is playing on screen. '
+                        'Works reliably with YouTube and most media apps. '
+                        'Support for Instagram/TikTok in-feed video depends on app version.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                      if (_holdOnVideoEnabled) ...[
+                        const SizedBox(height: 12),
+                        AppLabeledTextField(
+                          label: 'Max wait time (seconds)',
+                          controller: _maxVideoWaitController,
+                          keyboardType: TextInputType.number,
+                          hintText: '180',
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'If the video does not end within this time, the scroll '
+                          'will proceed anyway (min: 10 s, max: 600 s).',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                       const SizedBox(height: AppDimensions.formSectionGap),

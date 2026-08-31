@@ -63,12 +63,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadRecentScripts();
   }
 
+  /// 1-Tap Quick Launcher for Social Feeds / Reels Auto-Scroll
+  void _launchQuickReelScroll(BuildContext context) {
+    final script = ScriptEntity(
+      id: 'quick_reel_scroll',
+      name: 'Quick Social Auto-Scroll',
+      actionType: 'swipe',
+      intervalValue: 2,
+      intervalUnit: 'Sec',
+      repeatType: 'infinite',
+      repeatCount: 1,
+      randomDelayEnabled: true,
+      randomDelayMin: 1,
+      randomDelayMax: 3,
+      holdOnVideoEnabled: true,
+      maxVideoWaitSeconds: 180,
+      createdAt: DateTime.now(),
+    );
+    Navigator.of(context).pushNamed(
+      AppRouteNames.running,
+      arguments: script,
+    );
+  }
+
+  /// 1-Tap Quick Launcher for Instant Auto-Clicker
+  void _launchQuickClicker(BuildContext context) {
+    final script = ScriptEntity(
+      id: 'quick_auto_clicker',
+      name: 'Quick Auto-Clicker',
+      actionType: 'click',
+      intervalValue: 500,
+      intervalUnit: 'ms',
+      repeatType: 'infinite',
+      repeatCount: 1,
+      randomDelayEnabled: false,
+      randomDelayMin: 1,
+      randomDelayMax: 3,
+      createdAt: DateTime.now(),
+    );
+    Navigator.of(context).pushNamed(
+      AppRouteNames.running,
+      arguments: script,
+    );
+  }
+
   Future<void> _importScript(BuildContext context) async {
     final result = await ImportExportScriptUseCase.importScriptFromFile();
     if (!context.mounted) return;
 
     if (result.isSuccess && result.dataOrNull != null) {
-      // §12 — Run field-level validation before persisting
       final json = result.dataOrNull!.toJson();
       final errors = ScriptValidator.validateImportedJson(json);
       if (errors.isNotEmpty) {
@@ -170,7 +213,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final recentList = _savedScripts.take(3).toList();
+    final recentList = _savedScripts.take(4).toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -190,14 +233,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const SizedBox(height: 12),
+
+                  // ── Hero Quick Action Launchers ─────────────────────────
+                  _HeroLaunchCard(
+                    title: 'Social Feed & Reel Auto-Scroll',
+                    subtitle: 'Smart auto-scroll for Facebook, TikTok & Reels with video detection',
+                    badge: 'POPULAR 🎬',
+                    icon: Icons.swipe_vertical_rounded,
+                    gradientColors: const [Color(0xFF4F46E5), Color(0xFF3B82F6)],
+                    buttonLabel: '1-Tap Start Scroll',
+                    onTap: () => _launchQuickReelScroll(context),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  _HeroLaunchCard(
+                    title: 'Instant Auto-Clicker',
+                    subtitle: 'Fast continuous tapping for games, shopping & form filling',
+                    badge: 'FAST ⚡',
+                    icon: Icons.touch_app_rounded,
+                    gradientColors: const [Color(0xFF0284C7), Color(0xFF06B6D4)],
+                    buttonLabel: '1-Tap Start Clicker',
+                    onTap: () => _launchQuickClicker(context),
+                  ),
+
                   const SizedBox(height: AppDimensions.dashboardSectionGap),
+
+                  // ── Management Grid ─────────────────────────────────────
                   _ActionGrid(
                     onNewScript: () => _openNewScript(context),
                     onSavedScript: () => _openSavedScripts(context),
                     onImportScript: () => _importScript(context),
                     onExportScript: () => _exportScript(context),
                   ),
+
                   const SizedBox(height: AppDimensions.dashboardSectionGap),
+
                   const Text(
                     AppStrings.recentScripts,
                     style: TextStyle(
@@ -207,6 +279,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
+
                   if (_isLoading)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
@@ -245,13 +318,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ? AppColors.accentPink
                                         : AppColors.textPrimary),
                                 name: recentList[i].name,
-                                // Use real last-run timestamp instead of hardcoded "Just now"
                                 lastUsedLabel: recentList[i].lastRunLabel,
                                 onPlayPressed: () => _runScript(context, recentList[i]),
                               ),
                             ]
                           else
-                            // Clean empty state — no fake placeholder scripts
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 32),
                               child: Column(
@@ -280,15 +351,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
+
                   const SizedBox(height: AppDimensions.dashboardSectionGap),
+
                   AppPrimaryButton(
                     label: AppStrings.createNewScript,
                     onPressed: () => _openNewScript(context),
-                    trailingIcon: null,
+                    trailingIcon: Icons.add_circle_outline,
                     expand: true,
                   ),
                   const SizedBox(height: 24),
                 ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rich Hero Card with gradient and labeled icons
+class _HeroLaunchCard extends StatelessWidget {
+  const _HeroLaunchCard({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.icon,
+    required this.gradientColors,
+    required this.buttonLabel,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String badge;
+  final IconData icon;
+  final List<Color> gradientColors;
+  final String buttonLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors.first.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.white, size: 26),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      badge,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 12.5,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 38,
+            child: ElevatedButton.icon(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: gradientColors.first,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.play_arrow_rounded, size: 20),
+              label: Text(
+                buttonLabel,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
           ),
@@ -369,4 +558,3 @@ class _ActionGrid extends StatelessWidget {
     );
   }
 }
-

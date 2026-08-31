@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,7 +9,6 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/app_urls.dart';
 import '../../widgets/common/app_screen_header.dart';
-import '../../widgets/settings/hotkey_capture_dialog.dart';
 import '../../widgets/settings/language_picker_dialog.dart';
 import '../../widgets/settings/need_help_card.dart';
 import '../../widgets/settings/power_user_card.dart';
@@ -36,7 +33,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _darkModeOptimization = false;
   bool _collisionDetection = true;
   String _currentLanguageLabel = AppStrings.languageEnglish;
-  String _hotkeyLabel = AppStrings.globalHotkeysValue;
   bool _isLoading = true;
 
   @override
@@ -51,7 +47,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final dark = await prefs.getDarkMode();
     final collision = await prefs.getCollisionDetection();
     final lang = await prefs.getAppLanguage();
-    final hotkey = await prefs.getGlobalHotkey();
     if (mounted) {
       setState(() {
         _launchOnStartup = launch;
@@ -59,19 +54,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _collisionDetection = collision;
         _currentLanguageLabel =
             lang == 'ur' ? AppStrings.languageUrdu : AppStrings.languageEnglish;
-        _hotkeyLabel = hotkey ?? AppStrings.globalHotkeysValue;
         _isLoading = false;
       });
     }
   }
 
-  // §4 — Language picker
+  // Language picker
   Future<void> _openLanguagePicker() async {
     await showDialog<void>(
       context: context,
       builder: (_) => const LanguagePickerDialog(),
     );
-    // Reload language label after dialog closes
     final lang = await PreferencesLocalDataSource.instance.getAppLanguage();
     if (mounted) {
       setState(() {
@@ -81,18 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // §5 — Hotkey capture (Android-only)
-  Future<void> _openHotkeyCapture() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (_) => const HotkeyCaptureDialog(),
-    );
-    if (result != null && mounted) {
-      setState(() => _hotkeyLabel = result);
-    }
-  }
-
-  // §6 — Update check
+  // Update check
   Future<void> _checkForUpdates() async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +88,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // §7 — Terms of Service
+  // Terms of Service
   Future<void> _openTermsOfService() async {
     final uri = Uri.parse(AppUrls.termsOfService);
     if (await canLaunchUrl(uri)) {
@@ -114,12 +96,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // §8 — Manage subscription
+  // Manage subscription
   Future<void> _openManageSubscription() async {
     await SubscriptionService.instance.openManageSubscription();
   }
 
-  // §9 — Contact support
+  // Contact support
   Future<void> _contactSupport() async {
     final launched = await SupportService.instance.contactSupport();
     if (!launched && mounted) {
@@ -139,9 +121,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // §5 — only show hotkey row on Android (physical keyboard feature)
-    final bool showHotkeys = !kIsWeb && Platform.isAndroid;
-
     return Scaffold(
       backgroundColor: AppColors.surfaceWhite,
       body: SafeArea(
@@ -177,7 +156,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .setLaunchOnStartup(v);
                             },
                           ),
-                          // §4 — Language picker (real implementation)
                           SettingsNavRow(
                             title: AppStrings.appLanguageTitle,
                             value: _currentLanguageLabel,
@@ -199,12 +177,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             icon: Icons.auto_awesome_motion_outlined,
                             title: AppStrings.automationSectionTitle,
                           ),
-                          // §5 — Hotkey capture (Android-only)
-                          if (showHotkeys)
-                            _GlobalHotkeyRow(
-                              hotkeyLabel: _hotkeyLabel,
-                              onEdit: _openHotkeyCapture,
-                            ),
                           SettingsToggleRow(
                             title: AppStrings.collisionDetectionTitle,
                             subtitle: AppStrings.collisionDetectionSubtitle,
@@ -216,7 +188,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             },
                           ),
                           SizedBox(height: context.scaleH(20)),
-                          // §8 — Manage subscription (real implementation)
                           PowerUserCard(
                             onManageSubscription: _openManageSubscription,
                           ),
@@ -236,20 +207,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             title: AppStrings.releaseDateLabel,
                             value: AppStrings.releaseDateValue,
                           ),
-                          // §6 — Update check (real implementation)
                           SettingsNavRow(
                             title: AppStrings.checkForUpdatesLabel,
                             trailingIcon: Icons.refresh,
                             onTap: _checkForUpdates,
                           ),
-                          // §7 — Terms of Service URL (real implementation)
                           SettingsNavRow(
                             title: AppStrings.termsOfServiceLabel,
                             trailingIcon: Icons.open_in_new,
                             onTap: _openTermsOfService,
                           ),
                           SizedBox(height: context.scaleH(20)),
-                          // §9 — Contact support (real implementation)
                           NeedHelpCard(
                             onContactSupport: _contactSupport,
                           ),
@@ -259,72 +227,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _GlobalHotkeyRow extends StatelessWidget {
-  const _GlobalHotkeyRow({
-    required this.hotkeyLabel,
-    required this.onEdit,
-  });
-
-  final String hotkeyLabel;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppStrings.globalHotkeysTitle,
-                  style: AppTextStyles.cardTitle.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  AppStrings.globalHotkeysSubtitle,
-                  style: AppTextStyles.fieldLabel.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.switchTrackOff,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              hotkeyLabel,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.fieldLabel.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                height: 1.2,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            splashRadius: 16,
-            icon: const Icon(Icons.edit_outlined, size: 16),
-            color: AppColors.textSecondary,
-            onPressed: onEdit,
-          ),
-        ],
       ),
     );
   }

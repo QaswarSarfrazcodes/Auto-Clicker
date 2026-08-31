@@ -53,7 +53,7 @@ abstract final class AppDimensions {
   static const double permissionHorizontalPadding = 28;
   static const double permissionBackButtonTop = 16;
   static const double permissionIconTop = 90;
-  static const double permissionIconSize = 120;
+  static const double permissionIconSize = 270;
   static const double permissionBadgeSize = 96;
   static const double permissionHeadlineTopGap = 40;
   static const double permissionSubtextTopGap = 12;

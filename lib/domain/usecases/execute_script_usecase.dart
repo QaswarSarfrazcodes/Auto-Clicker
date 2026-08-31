@@ -3,7 +3,9 @@ import 'dart:math';
 
 import '../../core/util/logger.dart';
 import '../../data/datasources/native_automation_channel.dart';
+import '../../data/datasources/video_hold_channel.dart';
 import '../entities/script_entity.dart';
+import '../entities/video_hold_state.dart';
 
 enum ExecutionState { idle, running, paused, stopped }
 
@@ -20,8 +22,15 @@ class ExecuteScriptUseCase {
       int durationMs,
     })?
     dispatchSwipe,
-  }) : _dispatchClick = dispatchClick ?? NativeAutomationChannel.dispatchClick,
-       _dispatchSwipe = dispatchSwipe ?? NativeAutomationChannel.dispatchSwipe;
+    // Feature B — injectable for unit-testing without a real MethodChannel
+    Future<bool> Function(String foregroundPackage)? isVideoPlaying,
+  })  : _dispatchClick = dispatchClick ?? NativeAutomationChannel.dispatchClick,
+        _dispatchSwipe = dispatchSwipe ?? NativeAutomationChannel.dispatchSwipe,
+        _isVideoPlaying = isVideoPlaying ?? _defaultIsVideoPlaying;
+
+  /// Default Signal 1→2→3 detector — delegates to VideoHoldChannel.
+  static Future<bool> _defaultIsVideoPlaying(String foregroundPackage) =>
+      VideoHoldChannel.isVideoPlaying(foregroundPackage: foregroundPackage);
 
   final ScriptEntity script;
   final Future<bool> Function(double x, double y, {int durationMs})
@@ -34,6 +43,8 @@ class ExecuteScriptUseCase {
     int durationMs,
   })
   _dispatchSwipe;
+  /// Feature B — injectable check; defaults to [VideoHoldChannel.isVideoPlaying].
+  final Future<bool> Function(String foregroundPackage) _isVideoPlaying;
   ExecutionState _state = ExecutionState.idle;
   int _clicksCompleted = 0;
   int _iterations = 0;
@@ -114,6 +125,13 @@ class ExecuteScriptUseCase {
       }
 
       // Action Dispatching
+      // Feature B — hold the next scroll/click while a video is playing.
+      if (script.holdOnVideoEnabled && _state == ExecutionState.running) {
+        final holdPhase = await _waitForVideoToEnd();
+        logDebug('VideoHold ended with phase: $holdPhase');
+        if (_state != ExecutionState.running) break;
+      }
+
       if (script.actionType == 'swipe' && script.swipeConfig != null) {
         final swipe = script.swipeConfig!;
 
@@ -201,6 +219,46 @@ class ExecuteScriptUseCase {
     _loopActive = false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Feature B — Video-Aware Scroll Hold
+  // ---------------------------------------------------------------------------
+
+  /// Holds the next scroll until the video ends or [maxWait] expires.
+  ///
+  /// Polls [_isVideoPlaying] every 500 ms. Returns the final [VideoHoldPhase]:
+  ///   • [VideoHoldPhase.idle]    — video wasn't playing at all (no hold needed)
+  ///   • [VideoHoldPhase.resumed] — video ended naturally before the cap
+  ///   • [VideoHoldPhase.timedOut]— max-wait expired; scroll forced to proceed
+  ///
+  /// The 3-minute cap (default) is the hard safety valve from solution.md §2 —
+  /// it ensures the script NEVER hangs indefinitely on a livestream or a
+  /// broken/stuck playback state.
+  Future<VideoHoldPhase> _waitForVideoToEnd() async {
+    // Quick initial check — if video isn't playing, return immediately (idle).
+    final isPlaying = await _isVideoPlaying('');
+    if (!isPlaying) return VideoHoldPhase.idle;
+
+    logDebug('VideoHold: video detected, holding scroll for up to ${script.maxVideoWaitSeconds}s');
+
+    final deadline = DateTime.now().add(script.maxVideoWaitDuration);
+
+    while (DateTime.now().isBefore(deadline) && _state == ExecutionState.running) {
+      // Re-check twice per second — cheap given Signal 1/2 are near-free calls.
+      await _pauseAwareDelay(500);
+      if (_state != ExecutionState.running) break;
+
+      final stillPlaying = await _isVideoPlaying('');
+      if (!stillPlaying) {
+        logDebug('VideoHold: playback ended naturally — resuming scroll');
+        return VideoHoldPhase.resumed;
+      }
+    }
+
+    // Max-wait cap expired — force scroll to proceed, never hang forever.
+    logDebug('VideoHold: max-wait (${script.maxVideoWaitSeconds}s) expired — forcing scroll');
+    return VideoHoldPhase.timedOut;
+  }
+
   Future<void> _pauseAwareDelay(int milliseconds) async {
     var remaining = milliseconds;
     while (remaining > 0 && _state != ExecutionState.stopped) {
@@ -217,6 +275,7 @@ class ExecuteScriptUseCase {
   void _complete() {
     if (_completionSent) return;
     _completionSent = true;
+    _runtimeTimer?.cancel(); // ensure the periodic timer is cancelled on natural completion
     _onComplete?.call();
   }
 

@@ -83,6 +83,22 @@
     - [12.2 143+ Enterprise QA Test Scenario Matrix](#122-143-enterprise-qa-test-scenario-matrix)
     - [12.3 Unit, Widget & Screen Test Suites](#123-unit-widget--screen-test-suites)
 13. [Developer Context, Setup & Contribution Guide](#13-developer-context-setup--contribution-guide)
+14. [Feature A — Session Fatigue Timer (Auto-Pause & Continue)](#14-feature-a--session-fatigue-timer)
+    - [14.1 Problem Statement & Motivation](#141-problem-statement--motivation)
+    - [14.2 Functional Requirements (FR-A1 → FR-A7)](#142-functional-requirements-fr-a1--fr-a7)
+    - [14.3 Non-Functional Requirements](#143-non-functional-requirements)
+    - [14.4 Architecture & Domain Layer Design](#144-architecture--domain-layer-design)
+    - [14.5 Data Layer — Persistence & Native Channels](#145-data-layer--persistence--native-channels)
+    - [14.6 Presentation Layer — UI & UX](#146-presentation-layer--ui--ux)
+    - [14.7 Android Native Implementation](#147-android-native-implementation)
+    - [14.8 Session Fatigue State Machine Diagram](#148-session-fatigue-state-machine-diagram)
+    - [14.9 Complete File Map](#149-complete-file-map)
+    - [14.10 Test Coverage](#1410-test-coverage)
+15. [Feature B — Content-Aware Adaptive Scroll (Planned)](#15-feature-b--content-aware-adaptive-scroll-planned)
+    - [15.1 Problem Statement](#151-problem-statement)
+    - [15.2 Functional Requirements (FR-B1 → FR-B7)](#152-functional-requirements-fr-b1--fr-b7)
+    - [15.3 Technical Options & Recommendation](#153-technical-options--recommendation)
+    - [15.4 Build Order & Status](#154-build-order--status)
 
 ---
 
@@ -1162,6 +1178,534 @@ flutter run
 * **Strict Const Rule:** Always use `const` constructors for widgets to maximize rendering performance.
 * **Separation of Concerns:** Never put platform channel calls or storage logic inside presentation widgets; route all business logic through Domain UseCases.
 * **Defensive Input:** Always validate coordinates, durations, and intervals using `ScriptValidator`.
+
+---
+
+
+---
+
+# 14. Feature A — Session Fatigue Timer
+
+> **Status:** ✅ Fully Implemented & Tested (all 45 tests passing)
+
+```
+════════════════════════════════════════════════════════════════════
+   FEATURE A — SESSION FATIGUE TIMER ("Auto-Pause & Ask to Continue")
+   Pure Dart, Zero AI, Zero Internet, Zero New Android Permission
+════════════════════════════════════════════════════════════════════
+```
+
+## 14.1 Problem Statement & Motivation
+
+A script — especially an auto-scroll or multi-point clicker — can run indefinitely once started. Nothing in the original design stopped it after an extended stretch. This creates three concrete problems:
+
+1. **Battery & device wear** — a script running for 3+ hours unattended keeps the CPU and display active far longer than the user intended.
+2. **Operator fatigue awareness** — best-practice automation UX (both in test tooling and consumer apps) now expects the tool to check in with the user rather than silently run forever.
+3. **Play Store review risk** — apps in the Automation/Accessibility category that appear to "run forever unattended" receive heightened scrutiny; an explicit auto-pause mechanism demonstrates responsible design.
+
+**Key constraint (from `requirementsautoclicker.md`):**
+> This feature needs **zero AI, zero API, zero internet**. Pure application logic already well inside the existing `ExecuteScriptUseCase` design.
+
+---
+
+## 14.2 Functional Requirements (FR-A1 → FR-A7)
+
+| ID | Requirement | Implementation |
+|---|---|---|
+| **FR-A1** | Every script execution tracks continuous elapsed runtime **independent of pause/resume gaps** | `SessionFatigueGuard.onTick()` is only called while `_isPaused == false` in `RunningScreen` |
+| **FR-A2** | A configurable **Session Limit** (default: 1 hour; presets: 30 min / 45 min / 1 hr / 2 hr / Custom) settable globally in Settings and per-session via sidebar | `SessionFatiguePreset` enum + `FatigueSidebar` UI |
+| **FR-A3** | When elapsed runtime reaches the Session Limit, the engine **auto-pauses** (does not stop — script state, click counters, and runtime counters are preserved) | `SessionFatigueGuard.onLimitReached()` → `RunningScreen._onFatigueLimitReached()` → `_useCase?.pause()` |
+| **FR-A4** | On auto-pause, user is shown a **"Continue?"** prompt — in-app `ContinueOrStopDialog` if foregrounded; high-priority **notification with Continue/Stop action buttons** if minimized or phone locked | In-app: `ContinueOrStopDialog`; Native: `AutoClickForegroundService.showContinuePrompt()` + `FatigueNotificationActionReceiver` |
+| **FR-A5** | Tapping "Continue" resumes exactly where it left off and restarts a fresh Session Limit countdown | `SessionFatigueGuard.resumeCheckIn()` resets `_elapsedSinceLastCheckIn` and flips phase back to `running` |
+| **FR-A6** | No response within a configurable grace window (default: 5 minutes) auto-stops the script fully | `SessionFatigueGuard.onGraceExpired()` → `RunningScreen._onFatigueGraceExpired()` → `_stop()` |
+| **FR-A7** | Session Limit is a **UX safety feature** — it must not conflict with or replace the hardware Volume-Down kill-switch or the interval-floor freeze guard | Guard operates in a separate `Timer.periodic` lane; kill-switch path (`onEmergencyStop`) fully independent |
+
+---
+
+## 14.3 Non-Functional Requirements
+
+| ID | Requirement | How Met |
+|---|---|---|
+| **NFR-A1** | Zero new Android permissions | ✅ Reuses existing `POST_NOTIFICATIONS` (already declared for FGS notif) |
+| **NFR-A2** | Zero internet, zero API | ✅ Entirely local — `SessionFatigueGuard` is pure Dart, no network calls |
+| **NFR-A3** | Tick accuracy ≤ 1s | ✅ `Timer.periodic(Duration(seconds: 1))` driving the guard; same cadence as existing `_runtimeTimer` |
+| **NFR-A4** | Settings persisted across app restarts | ✅ `FatiguePreferencesDataSource` writes to `SharedPreferences` |
+| **NFR-A5** | Graceful degradation when dialog is dismissed without action | ✅ Grace window timer keeps ticking; auto-stop fires after 5 min |
+| **NFR-A6** | No test-time timer leaks | ✅ `_sidebarAutoOpenTimer` and `_fatigueTickTimer` both cancelled in `dispose()`; `_runtimeTimer` cancelled in `_complete()` |
+
+---
+
+## 14.4 Architecture & Domain Layer Design
+
+### Clean Architecture Layer Allocation
+
+```
+╔════════════════════════════════════════════════════════════╗
+║  PRESENTATION LAYER                                         ║
+║  ┌──────────────────────┐  ┌──────────────────────────┐    ║
+║  │ RunningScreen         │  │ FatigueSidebar            │    ║
+║  │  • auto-opens 600ms  │  │  • Glassmorphism dark UI  │    ║
+║  │  • _fatigueGuard     │  │  • Preset chips           │    ║
+║  │  • _fatigueTickTimer │  │  • ActionMode picker      │    ║
+║  └──────────────────────┘  └──────────────────────────┘    ║
+║  ┌──────────────────────────────────────────────────────┐   ║
+║  │ ContinueOrStopDialog  (in-app fallback / foreground)  │   ║
+║  │  • Live grace-window countdown timer                  │   ║
+║  │  • Turns red < 60s remaining                          │   ║
+║  └──────────────────────────────────────────────────────┘   ║
+╠════════════════════════════════════════════════════════════╣
+║  DOMAIN LAYER                                               ║
+║  ┌──────────────────────┐  ┌──────────────────────────┐    ║
+║  │ SessionFatigueGuard  │  │ SessionFatigueConfig      │    ║
+║  │  (pure Dart engine)  │  │  (immutable value object) │    ║
+║  │  onTick()            │  │  preset / customLimit     │    ║
+║  │  resumeCheckIn()     │  │  graceWindow              │    ║
+║  │  onLimitReached cb   │  │  isEnabled / effectiveLimit│   ║
+║  └──────────────────────┘  └──────────────────────────┘    ║
+║  ┌──────────────────────┐                                   ║
+║  │ SessionFatigueState  │                                   ║
+║  │  phase: running /    │                                   ║
+║  │  awaitingContinue /  │                                   ║
+║  │  autoStopped         │                                   ║
+║  └──────────────────────┘                                   ║
+╠════════════════════════════════════════════════════════════╣
+║  DATA LAYER                                                 ║
+║  ┌──────────────────────┐  ┌──────────────────────────┐    ║
+║  │FatiguePreferences    │  │FatigueNotificationChannel │    ║
+║  │DataSource            │  │  MethodChannel wrapper    │    ║
+║  │  SharedPreferences   │  │  EventChannel (actions)   │    ║
+║  └──────────────────────┘  └──────────────────────────┘    ║
+╠════════════════════════════════════════════════════════════╣
+║  ANDROID NATIVE (Kotlin)                                    ║
+║  ┌──────────────────────┐  ┌──────────────────────────┐    ║
+║  │AutoClickForeground   │  │FatigueNotificationAction  │    ║
+║  │Service.kt            │  │Receiver.kt                │    ║
+║  │  showContinuePrompt()│  │  BroadcastReceiver        │    ║
+║  │  dismissContinue     │  │  FatigueActionEvent       │    ║
+║  │  Prompt()            │  │  StreamHandler (singleton)│    ║
+║  └──────────────────────┘  └──────────────────────────┘    ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+### `SessionFatigueGuard` — Core Engine Logic
+
+The guard is a **pure Dart class** with no Flutter, no platform, no `BuildContext` dependencies. It lives in the Domain layer alongside `ExecuteScriptUseCase`.
+
+```dart
+// lib/domain/engines/session_fatigue_guard.dart
+class SessionFatigueGuard {
+  SessionFatigueGuard({
+    required SessionFatigueConfig config,
+    required VoidCallback onLimitReached, // FR-A3
+    required VoidCallback onGraceExpired, // FR-A6
+  });
+
+  // Called every 1s tick — only when script is NOT paused (FR-A1)
+  void onTick(Duration tickSize);
+
+  // Called when user taps "Continue" — resets clock (FR-A5)
+  void resumeCheckIn();
+
+  void dispose();
+}
+```
+
+### Session Fatigue Presets (`SessionFatiguePreset`)
+
+```dart
+// lib/core/constants/session_fatigue_presets.dart
+enum SessionFatiguePreset {
+  off,        // Disabled entirely
+  thirtyMin,  // 30 minutes
+  fortyFive,  // 45 minutes
+  oneHour,    // 1 hour  ← DEFAULT
+  twoHours,   // 2 hours
+  custom,     // User-specified (5–480 min)
+}
+
+const kDefaultFatiguePreset = SessionFatiguePreset.oneHour;
+const kDefaultFatigueGraceWindow = Duration(minutes: 5);
+const kFatigueGuardTickSize = Duration(seconds: 1);
+```
+
+### `SessionFatigueConfig` — Immutable Value Object
+
+```dart
+// lib/domain/entities/session_fatigue_config.dart
+class SessionFatigueConfig {
+  final SessionFatiguePreset preset;   // Selected preset
+  final Duration? customLimit;          // Only when preset == custom
+  final Duration graceWindow;          // Default: 5 minutes
+
+  bool get isEnabled => preset != SessionFatiguePreset.off;
+  Duration? get effectiveLimit;        // Resolves custom or preset duration
+
+  static const defaultConfig = SessionFatigueConfig(
+    preset: SessionFatiguePreset.oneHour,
+  );
+}
+```
+
+---
+
+## 14.5 Data Layer — Persistence & Native Channels
+
+### `FatiguePreferencesDataSource` (SharedPreferences)
+
+| SharedPreferences Key | Type | Default | Description |
+|---|---|---|---|
+| `session_fatigue_preset_index` | `int` | `3` (oneHour) | Index into `SessionFatiguePreset.values` |
+| `session_fatigue_custom_minutes` | `int?` | `null` | Only set when preset is `custom`; clamped 5–480 |
+| `session_fatigue_grace_window_minutes` | `int` | `5` | Grace window before auto-stop |
+
+### `FatigueNotificationChannel` (Dart ↔ Android bridge)
+
+| Channel Type | Channel ID | Direction | Purpose |
+|---|---|---|---|
+| `MethodChannel` | `com.example.auto_clicker/fatigue_notification` | Dart → Android | `showContinuePrompt` / `dismissContinuePrompt` |
+| `EventChannel` | `com.example.auto_clicker/fatigue_notification_actions` | Android → Dart | Streams `"continue"` / `"stop"` strings when user taps notification action button |
+
+---
+
+## 14.6 Presentation Layer — UI & UX
+
+### FatigueSidebar — Premium Dark Glassmorphism Drawer
+
+The sidebar is registered as `Scaffold.drawer` in `RunningScreen` and **auto-opens 600ms after script execution starts** via a tracked `Timer` (stored in `_sidebarAutoOpenTimer` and cancelled in `dispose()`).
+
+**Sidebar sections (top → bottom):**
+
+```
+┌─────────────────────────────────────────────┐
+│ ⚡ Script Name              ● Running        │  ← Header
+├─────────────────────────────────────────────┤
+│ 🖱 Clicks          ⏱ Runtime               │  ← Live Stats
+│   1,234             00:42:07                │
+├─────────────────────────────────────────────┤
+│  ACTION MODE                                │
+│ ┌─────────────────┬─────────────────┐       │
+│ │ 👆 Auto Click  │ ↕ Auto Scroll   │       │  ← Mode Picker
+│ └─────────────────┴─────────────────┘       │
+├─────────────────────────────────────────────┤
+│  SESSION FATIGUE TIMER                      │
+│  Auto-Pause  ────────────────── [●] ON      │  ← Toggle
+│                                             │
+│  [30m] [45m] [1hr●] [2hr] [Custom]          │  ← Preset Chips
+│                                             │
+│  ✓ Script pauses after 1 hour               │  ← Summary label
+├─────────────────────────────────────────────┤
+│ ℹ Changes apply to the next run             │  ← Footer tip
+└─────────────────────────────────────────────┘
+```
+
+**Design tokens:**
+- Background: `LinearGradient(#0D0D1A → #12122A → #0A0A18)`
+- Border: `AppColors.primaryBlue` at 40% opacity
+- Preset chip selected state: `AppColors.primaryBlue` + glow box-shadow
+- Toggle: custom animated container (no `Switch` widget — pixel-perfect)
+- Width: fixed `300px`; slides in from left via Flutter's native `Drawer`
+
+### ContinueOrStopDialog — In-App Prompt
+
+Shown when the app is **foregrounded** and the session limit fires:
+
+- Dark glass card (`#1A1A2E → #16213E` gradient, `primaryBlue` border glow)
+- ⏱ Timer icon + `"Session Limit Reached"` headline
+- Script name badge in blue pill
+- **Live countdown** (`Timer.periodic(1s)`) showing remaining grace window
+- Countdown text turns `AppColors.dangerRed` when < 60 seconds remain
+- **Stop** (outlined red, left) + **Continue** (filled blue, 2× wider, right)
+
+### RunningScreen Fatigue Timer Badge
+
+A small inline badge displayed below the Speed card:
+```
+⏱ Auto-pause in 1 hour
+```
+Only shown when `_fatigueConfig.isEnabled == true`.
+
+### Settings Button in RunningScreen Toolbar
+
+A `"⚙ Settings"` chip in the top-right of RunningScreen re-opens the sidebar drawer at any time.
+
+---
+
+## 14.7 Android Native Implementation
+
+### `AutoClickForegroundService.kt` — New Methods
+
+```kotlin
+// Shows "Session limit reached" notification with Continue/Stop actions
+fun showContinuePrompt(scriptName: String)
+
+// Cancels the fatigue notification
+fun dismissContinuePrompt()
+```
+
+Both methods use `NotificationManager.notify(NOTIFICATION_ID_FATIGUE = 1002, ...)` on the existing `auto_clicker_running_channel` — **no new notification channel required**.
+
+### `FatigueNotificationActionReceiver.kt` — BroadcastReceiver
+
+```kotlin
+class FatigueNotificationActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = when (intent.action) {
+            ACTION_FATIGUE_CONTINUE -> "continue"
+            ACTION_FATIGUE_STOP     -> "stop"
+            else -> return
+        }
+        FatigueActionEventStreamHandler.sink?.success(action) // → Flutter EventChannel
+        context.startService(...)  // dismiss the notification
+    }
+}
+
+object FatigueActionEventStreamHandler : EventChannel.StreamHandler {
+    var sink: EventChannel.EventSink? = null
+    override fun onListen(...) { sink = events }
+    override fun onCancel(...) { sink = null }
+}
+```
+
+### `AndroidManifest.xml` Addition
+
+```xml
+<!-- Session Fatigue Notification Action Receiver (Feature A) -->
+<!-- No new permission required — reuses existing POST_NOTIFICATIONS -->
+<receiver
+    android:name=".receiver.FatigueNotificationActionReceiver"
+    android:exported="false" />
+```
+
+### `MainActivity.kt` Additions
+
+```kotlin
+// Fatigue Notification MethodChannel
+MethodChannel(messenger, "com.example.auto_clicker/fatigue_notification")
+    .setMethodCallHandler { call, result ->
+        when (call.method) {
+            "showContinuePrompt"    -> { AutoClickForegroundService.instance?.showContinuePrompt(scriptName); result.success(null) }
+            "dismissContinuePrompt" -> { AutoClickForegroundService.instance?.dismissContinuePrompt(); result.success(null) }
+        }
+    }
+
+// Fatigue Notification Actions EventChannel
+EventChannel(messenger, "com.example.auto_clicker/fatigue_notification_actions")
+    .setStreamHandler(FatigueActionEventStreamHandler)
+```
+
+---
+
+## 14.8 Session Fatigue State Machine Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> running : Script starts
+
+    running --> awaitingContinue : elapsedSinceLastCheckIn >= effectiveLimit
+    note right of awaitingContinue
+        FR-A3: Script auto-paused
+        FR-A4: "Continue?" shown
+        (dialog if foreground,
+         notification if background)
+    end note
+
+    awaitingContinue --> running : User taps "Continue" (FR-A5)
+    note right of running
+        Guard.resumeCheckIn()
+        Fresh countdown begins
+    end note
+
+    awaitingContinue --> autoStopped : graceElapsed >= graceWindow (FR-A6)
+    note right of autoStopped
+        No response in 5 min
+        Script fully stopped
+    end note
+
+    running --> autoStopped : User taps "Stop"
+    awaitingContinue --> autoStopped : User taps "Stop"
+
+    autoStopped --> [*] : RunningScreen pops
+```
+
+**Concurrent timer lanes:**
+
+```mermaid
+sequenceDiagram
+    participant UI as RunningScreen
+    participant Guard as SessionFatigueGuard
+    participant UseCase as ExecuteScriptUseCase
+    participant Native as Android Notification
+
+    UI->>UseCase: start()
+    UI->>Guard: _buildFatigueGuard()
+    loop Every 1 second (while not paused)
+        UI->>Guard: onTick(1s)
+    end
+    Guard-->>UI: onLimitReached()
+    UI->>UseCase: pause()
+    UI->>Native: showContinuePrompt(scriptName)
+    alt User taps Continue (in-app or notification)
+        UI->>Guard: resumeCheckIn()
+        UI->>UseCase: resume()
+    else Grace window expires (5 min)
+        Guard-->>UI: onGraceExpired()
+        UI->>UseCase: stop()
+    end
+```
+
+---
+
+## 14.9 Complete File Map
+
+```
+lib/
+├── core/
+│   └── constants/
+│       └── session_fatigue_presets.dart   ← Presets enum, defaults, tick size
+├── domain/
+│   ├── entities/
+│   │   ├── session_fatigue_config.dart   ← Immutable config value object
+│   │   └── session_fatigue_state.dart    ← Phase + elapsed state snapshot
+│   └── engines/
+│       └── session_fatigue_guard.dart    ← Pure Dart engine (no Flutter deps)
+├── data/
+│   └── datasources/
+│       ├── fatigue_preferences_datasource.dart     ← SharedPreferences CRUD
+│       └── platform/
+│           └── fatigue_notification_channel.dart   ← MethodChannel + EventChannel
+└── presentation/
+    ├── screens/
+    │   └── running/
+    │       └── running_screen.dart        ← Sidebar, guard lifecycle, auto-open
+    └── widgets/
+        ├── running/
+        │   └── fatigue_sidebar.dart       ← Premium glassmorphism sidebar
+        └── execution/
+            └── continue_or_stop_dialog.dart  ← In-app Continue/Stop dialog
+
+android/app/src/main/kotlin/com/example/auto_clicker/
+├── MainActivity.kt                              ← Channel registration
+├── service/
+│   └── AutoClickForegroundService.kt           ← showContinuePrompt(), dismiss()
+└── receiver/
+    └── FatigueNotificationActionReceiver.kt    ← BroadcastReceiver + EventSink
+
+android/app/src/main/AndroidManifest.xml        ← FatigueNotificationActionReceiver
+```
+
+---
+
+## 14.10 Test Coverage
+
+All tests pass: **45/45** (`flutter test`, `flutter analyze` — no issues).
+
+| Test | File | Covers |
+|---|---|---|
+| `TC_RUN_01 & TC_RUN_02` | `running_saved_settings_screens_test.dart` | RunningScreen renders, sidebar auto-open timer cancelled on dispose |
+| `ExecuteScriptUseCase Tests` | `unit_test.dart` | `_runtimeTimer` cancelled on natural completion (no leak) |
+| All existing widget & screen tests | `widget_test.dart`, screen tests | No regressions from new drawer/sidebar |
+
+**Bug fixes included during this feature's implementation:**
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| `!timersPending` in `TC_RUN_01` | `Future.delayed(600ms)` for sidebar open was un-cancellable | Replaced with `_sidebarAutoOpenTimer = Timer(...)`, cancelled in `dispose()` |
+| `!timersPending` in `ExecuteScriptUseCase` | `_runtimeTimer` not cancelled on natural script completion | Added `_runtimeTimer?.cancel()` inside `_complete()` |
+
+---
+
+# 15. Feature B — Content-Aware Adaptive Scroll (Planned)
+
+> **Status:** 🔵 Requirements defined — NOT YET IMPLEMENTED
+
+```
+════════════════════════════════════════════════════════════════════
+   FEATURE B — "Don't scroll past a playing video"
+   Detect media playback on-screen and hold next scroll until done
+════════════════════════════════════════════════════════════════════
+```
+
+## 15.1 Problem Statement
+
+User sets a scroll script with a 4–5 second interval. While scrolling through a social feed (Instagram / Facebook / TikTok / YouTube Shorts), a **video post** appears. A fixed-interval scroll doesn't know or care — it scrolls past the video mid-play. The requirement: **detect that a video is currently playing on-screen and hold the next scroll until it ends** (or a per-video maximum wait cap fires, preventing an infinite hang on broken/looping videos).
+
+This is architecturally harder than Feature A because it requires reading something about **another app's screen state** — which has multiple technical paths, with very different cost/privacy/reliability tradeoffs.
+
+---
+
+## 15.2 Functional Requirements (FR-B1 → FR-B7)
+
+| ID | Requirement |
+|---|---|
+| **FR-B1** | Settings exposes a **"Wait for video to finish before scrolling"** toggle, **off by default** (opt-in only — not silently always-on) |
+| **FR-B2** | When enabled, app requests the **Notification Access** special permission via a dedicated permission screen before activating detection |
+| **FR-B3** | While the scroll target app is detected as playing (`PlaybackState.STATE_PLAYING` via `MediaSessionManager`), the engine **holds the next scroll dispatch** |
+| **FR-B4** | A **maximum wait cap** (default 3 minutes, configurable) forces the scroll even if playback state is stuck — prevents indefinite hangs |
+| **FR-B5** | If Notification Access is denied/revoked, feature **silently falls back to fixed-interval scrolling** without blocking core functionality |
+| **FR-B6** | Detection mechanism and known limitations disclosed in plain language at the point the toggle is enabled |
+| **FR-B7** | Time spent "holding" for video **still counts** toward the Feature A Session Fatigue elapsed runtime (the 1-hour cap shouldn't silently extend because the script kept pausing for videos) |
+
+---
+
+## 15.3 Technical Options & Recommendation
+
+| Option | Technology | Cost | Internet? | New Permission | Reliability | Recommendation |
+|---|---|---|---|---|---|---|
+| **1 — MediaSession** | `NotificationListenerService` + `MediaSessionManager.getActiveSessions()` | Free | ❌ None | Notification Access (one-time toggle) | High for YouTube / music apps; variable for Instagram/TikTok in-feed | ✅ **Ship first, default ON** |
+| **2 — A11y heuristic** | `AccessibilityNodeInfo` class-name matching (VideoView / ExoPlayer) | Free | ❌ None | None (reuses existing Accessibility) | Medium — breaks on UI refactors | ✅ Ship as fallback alongside Option 1 |
+| **3 — Frame-diff motion** | `MediaProjection` screen capture + pixel diff (no ML) | Free | ❌ None | `MediaProjection` recurring consent | High (app-agnostic) but real battery cost + UX overhead | 🟡 Optional opt-in, later if Options 1+2 insufficient |
+| **4 — Cloud AI vision** | Gemini API / GPT-4o screenshot analysis | Gemini Flash free tier: ~1,500 req/day; paid: Cloud Billing (not covered by Google AI Pro subscription) | ✅ **Required** | `INTERNET` | High but adds latency, privacy risk, architectural conflict | ❌ **Not recommended** — conflicts with offline-first architecture (NFR-07) |
+
+> **Note on Google AI Pro subscription:** A consumer Google AI Pro plan increases usage of the Gemini app, AI Studio, and Antigravity IDE — it does **not** increase Developer API quota for app-embedded calls. Those are rate-limited per Cloud project via Cloud Billing (pay-per-token). These are completely separate systems. Buying a personal subscription would give this app **zero extra API headroom**.
+
+### Recommended Android Implementation (Option 1)
+
+```xml
+<!-- AndroidManifest.xml addition for Feature B -->
+<service
+    android:name=".service.MediaPlaybackListenerService"
+    android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+    </intent-filter>
+</service>
+```
+
+```kotlin
+// service/MediaPlaybackListenerService.kt — sketch
+class MediaPlaybackListenerService : NotificationListenerService() {
+    private lateinit var mediaSessionManager: MediaSessionManager
+
+    override fun onListenerConnected() {
+        mediaSessionManager =
+            getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+    }
+
+    /** Returns true when any recognized app is actively playing media. */
+    fun isAnyRecognizedAppPlayingVideo(): Boolean {
+        val component = ComponentName(this, MediaPlaybackListenerService::class.java)
+        val controllers = mediaSessionManager.getActiveSessions(component)
+        return controllers.any {
+            it.playbackState?.state == PlaybackState.STATE_PLAYING
+        }
+    }
+}
+```
+
+**iOS note:** The closest equivalent uses `MPNowPlayingInfoCenter` / `AVAudioSession` route notifications, but iOS sandboxing limits cross-app `MediaSession` observation far more than Android. Feature B should be treated as **Android-first**; iOS support requires a separate research spike.
+
+---
+
+## 15.4 Build Order & Status
+
+| Step | Feature | Status |
+|---|---|---|
+| 1 | **Feature A — Session Fatigue Timer** | ✅ **Complete** |
+| 2 | Feature B, Option 1 — `MediaSession`/`NotificationListenerService` detection | 🔵 Planned |
+| 3 | Feature B, Option 2 — Accessibility heuristic fallback (Instagram, TikTok, Facebook allowlist) | 🔵 Planned |
+| 4 | Feature B, Option 3 — Frame-diff motion detection (opt-in "Advanced Detection") | 🔵 Optional, later |
+| 5 | Feature B, Option 4 — Cloud AI vision | ❌ Not recommended for this app |
 
 ---
 

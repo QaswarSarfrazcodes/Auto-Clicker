@@ -5,18 +5,24 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.NonNull
+import com.example.auto_clicker.receiver.FatigueActionEventStreamHandler
 import com.example.auto_clicker.service.AutoClickForegroundService
 import com.example.auto_clicker.service.AutoClickerService
 import com.example.auto_clicker.service.KillSwitchHandler
 import com.example.auto_clicker.service.OverlayService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
     private val AUTOMATION_CHANNEL = "com.example.auto_clicker/automation"
     private val OVERLAY_CHANNEL = "com.example.auto_clicker/overlay"
+    private val FATIGUE_NOTIFICATION_CHANNEL = "com.example.auto_clicker/fatigue_notification"
+    private val FATIGUE_NOTIFICATION_ACTIONS_CHANNEL = "com.example.auto_clicker/fatigue_notification_actions"
+    // Feature B — Video-Aware Scroll Hold
+    private val VIDEO_HOLD_CHANNEL = "com.example.auto_clicker/video_hold"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -66,6 +72,27 @@ class MainActivity : FlutterActivity() {
                 overlayMethodChannel.invokeMethod("onPickerDone", null)
             }
         }
+
+        // Fatigue Notification MethodChannel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FATIGUE_NOTIFICATION_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "showContinuePrompt" -> {
+                        val scriptName = call.argument<String>("scriptName") ?: ""
+                        AutoClickForegroundService.instance?.showContinuePrompt(scriptName)
+                        result.success(null)
+                    }
+                    "dismissContinuePrompt" -> {
+                        AutoClickForegroundService.instance?.dismissContinuePrompt()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Fatigue Notification Actions EventChannel
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, FATIGUE_NOTIFICATION_ACTIONS_CHANNEL)
+            .setStreamHandler(FatigueActionEventStreamHandler)
 
         // Automation Channel Handlers
         automationMethodChannel.setMethodCallHandler { call, result ->
@@ -301,5 +328,45 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+
+        // Feature B — Video Hold MethodChannel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VIDEO_HOLD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    // Called by execute_script_usecase before each scroll dispatch.
+                    // [foregroundPackage] is the package name of the app being scrolled
+                    // (e.g. "com.instagram.android"). Returns bool.
+                    "isVideoPlaying" -> {
+                        val foregroundPackage = call.argument<String>("foregroundPackage") ?: ""
+                        val service = AutoClickerService.sharedInstance
+                        if (service != null) {
+                            result.success(service.queryVideoPlayback(foregroundPackage))
+                        } else {
+                            // Accessibility Service not running — can't check; don't block scroll.
+                            result.success(false)
+                        }
+                    }
+
+                    // Check whether the user has granted Notification Access.
+                    "isNotificationAccessGranted" -> {
+                        result.success(com.example.auto_clicker.service.MediaPlaybackListenerService.isAvailable())
+                    }
+
+                    // Deep-link to System Settings > Notification Access.
+                    "openNotificationAccessSettings" -> {
+                        try {
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("INTENT_ERROR", e.message, null)
+                        }
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
     }
 }
