@@ -174,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       ),
                       subtitle: const Text(
-                        'Randomizes click timing (±15%) & adds ±3px offset so bots cannot be detected.',
+                        'Randomizes click timing (±15%) & adds subtle ±1.5px micro-offset so bots cannot detect the pattern without drifting off target.',
                         style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                       ),
                       value: jitterEnabled,
@@ -543,7 +543,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: _IntentCard(
                           title: 'Fatigue Guard',
-                          subtitle: '15m/30m Breaks & Jitter',
+                          subtitle: '15m/30m Breaks & ±1.5px Jitter',
                           badge: '🛡️ Anti-Ban Active',
                           icon: Icons.shield_outlined,
                           gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],

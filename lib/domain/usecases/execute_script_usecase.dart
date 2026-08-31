@@ -176,7 +176,10 @@ class ExecuteScriptUseCase {
       } else if (script.clickPoints.isNotEmpty) {
         for (final cp in script.clickPoints) {
           if (_state != ExecutionState.running) break;
-          final success = await _dispatchClick(cp.x, cp.y, durationMs: 50);
+          // Apply ±1.5px micro-jitter if random delay / anti-detection is enabled
+          final double jitterX = script.randomDelayEnabled ? (random.nextDouble() * 3.0 - 1.5) : 0.0;
+          final double jitterY = script.randomDelayEnabled ? (random.nextDouble() * 3.0 - 1.5) : 0.0;
+          final success = await _dispatchClick(cp.x + jitterX, cp.y + jitterY, durationMs: 50);
           _clicksCompleted++;
           _onTick?.call(_clicksCompleted, _elapsedSeconds);
           if (!success) {
@@ -190,7 +193,9 @@ class ExecuteScriptUseCase {
         }
       } else {
         // Default click coordinate if no points are configured in click mode
-        final success = await _dispatchClick(540, 960, durationMs: 50);
+        final double jitterX = script.randomDelayEnabled ? (random.nextDouble() * 3.0 - 1.5) : 0.0;
+        final double jitterY = script.randomDelayEnabled ? (random.nextDouble() * 3.0 - 1.5) : 0.0;
+        final success = await _dispatchClick(540 + jitterX, 960 + jitterY, durationMs: 50);
         _clicksCompleted++;
         _onTick?.call(_clicksCompleted, _elapsedSeconds);
         if (!success) {
