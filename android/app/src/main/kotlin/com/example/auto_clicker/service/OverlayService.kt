@@ -210,15 +210,15 @@ class OverlayService : Service() {
             val startX = swipeStartParams?.let { (it.x + dp(35)).toFloat() }
                 ?: (displayMetrics.widthPixels / 2f)
             val startY = swipeStartParams?.let { (it.y + dp(25)).toFloat() }
-                ?: (displayMetrics.heightPixels * 0.75f)
+                ?: (displayMetrics.heightPixels * 0.72f)
 
             val endX = swipeEndParams?.let { (it.x + dp(35)).toFloat() }
                 ?: (displayMetrics.widthPixels / 2f)
             val endY = swipeEndParams?.let { (it.y + dp(25)).toFloat() }
-                ?: (displayMetrics.heightPixels * 0.25f)
+                ?: (displayMetrics.heightPixels * 0.28f)
 
             Log.d(TAG, "Executing swipe: ($startX, $startY) -> ($endX, $endY)")
-            service.dispatchSwipe(startX, startY, endX, endY, 300L) { success ->
+            service.dispatchSwipe(startX, startY, endX, endY, 240L) { success ->
                 Log.d(TAG, "Swipe completed: $success")
             }
         }
@@ -231,9 +231,9 @@ class OverlayService : Service() {
         // ── Default Fallback Swipe ──────────────────────────────────────
         else {
             val midX = displayMetrics.widthPixels / 2f
-            val startY = displayMetrics.heightPixels * 0.75f
-            val endY = displayMetrics.heightPixels * 0.25f
-            service.dispatchSwipe(midX, startY, midX, endY, 300L)
+            val startY = displayMetrics.heightPixels * 0.72f
+            val endY = displayMetrics.heightPixels * 0.28f
+            service.dispatchSwipe(midX, startY, midX, endY, 240L)
         }
     }
 

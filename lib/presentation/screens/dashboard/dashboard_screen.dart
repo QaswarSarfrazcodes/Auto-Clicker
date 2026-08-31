@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/routing/app_route_names.dart';
+import '../../../data/datasources/preferences_local_datasource.dart';
 import '../../../data/datasources/script_local_datasource.dart';
 import '../../../domain/entities/script_entity.dart';
 import '../../../domain/usecases/import_export_script_usecase.dart';
@@ -53,6 +54,224 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.of(context).pushNamed(AppRouteNames.settings);
   }
 
+  Future<void> _openFatigueGuardSheet(BuildContext context) async {
+    final prefs = PreferencesLocalDataSource.instance;
+    int breakMinutes = await prefs.getFatigueBreakMinutes();
+    bool jitterEnabled = await prefs.getAntiDetectionJitter();
+    int sleepMinutes = await prefs.getAutoSleepMinutes();
+    bool batterySaver = await prefs.getBatterySaverStop();
+
+    if (!context.mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle grip
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFCBD5E1),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF059669), Color(0xFF10B981)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.shield_outlined, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Fatigue Guard & Anti-Ban',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Mimics human behavior & prevents bot detection',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 1. Auto-Breaks
+                    const Text(
+                      'Session Fatigue Auto-Breaks',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Takes a 45s natural human rest break after continuous running to avoid account flags.',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [0, 15, 30, 45, 60].map((mins) {
+                        final isSelected = breakMinutes == mins;
+                        return ChoiceChip(
+                          label: Text(mins == 0 ? 'Disabled' : '$mins min'),
+                          selected: isSelected,
+                          selectedColor: const Color(0xFF10B981),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            if (val) setModalState(() => breakMinutes = mins);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const Divider(height: 28),
+
+                    // 2. Anti-Detection Jitter
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Human Micro-Jitter (Anti-Detection)',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      ),
+                      subtitle: const Text(
+                        'Randomizes click timing (±15%) & adds ±3px offset so bots cannot be detected.',
+                        style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                      ),
+                      value: jitterEnabled,
+                      activeColor: const Color(0xFF10B981),
+                      onChanged: (val) => setModalState(() => jitterEnabled = val),
+                    ),
+                    const Divider(height: 24),
+
+                    // 3. Auto-Sleep Timer
+                    const Text(
+                      'Auto-Sleep Stop Timer',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Stops automation automatically to save battery and prevent screen burn-in.',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [0, 30, 60, 120].map((mins) {
+                        final isSelected = sleepMinutes == mins;
+                        return ChoiceChip(
+                          label: Text(mins == 0 ? 'Never' : (mins >= 60 ? '${mins ~/ 60} Hour' : '$mins min')),
+                          selected: isSelected,
+                          selectedColor: const Color(0xFF10B981),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                          onSelected: (val) {
+                            if (val) setModalState(() => sleepMinutes = mins);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const Divider(height: 24),
+
+                    // 4. Battery Saver Stop
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Battery Saver Guard (Auto-Stop at 20%)',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      ),
+                      subtitle: const Text(
+                        'Safely turns off auto-scrolling when device battery drops below 20%.',
+                        style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                      ),
+                      value: batterySaver,
+                      activeColor: const Color(0xFF10B981),
+                      onChanged: (val) => setModalState(() => batterySaver = val),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Save Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          await prefs.setFatigueBreakMinutes(breakMinutes);
+                          await prefs.setAntiDetectionJitter(jitterEnabled);
+                          await prefs.setAutoSleepMinutes(sleepMinutes);
+                          await prefs.setBatterySaverStop(batterySaver);
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('🛡️ Fatigue Guard settings saved & active!'),
+                                backgroundColor: Color(0xFF059669),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text(
+                          'Save & Apply Fatigue Guard',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _openNewScript(BuildContext context) async {
     await Navigator.of(context).pushNamed(AppRouteNames.createScript);
     _loadRecentScripts();
@@ -78,6 +297,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       randomDelayMax: 3,
       holdOnVideoEnabled: true,
       maxVideoWaitSeconds: 180,
+      swipeConfig: const SwipeConfigEntity(
+        startX: 540,
+        startY: 1500,
+        endX: 540,
+        endY: 500,
+        durationMs: 250,
+      ),
       createdAt: DateTime.now(),
     );
     Navigator.of(context).pushNamed(
@@ -313,16 +539,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      // 4. Fatigue Guard & Settings
+                      // 4. Fatigue Guard & Anti-Detection
                       Expanded(
                         child: _IntentCard(
                           title: 'Fatigue Guard',
                           subtitle: '15m/30m Breaks & Jitter',
-                          badge: '⚙️ Anti-Detection',
+                          badge: '🛡️ Anti-Ban Active',
                           icon: Icons.shield_outlined,
                           gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
                           buttonLabel: 'Configure',
-                          onTap: () => _openSettings(context),
+                          onTap: () => _openFatigueGuardSheet(context),
                         ),
                       ),
                     ],

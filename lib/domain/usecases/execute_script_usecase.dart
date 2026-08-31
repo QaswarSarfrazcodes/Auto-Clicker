@@ -132,12 +132,17 @@ class ExecuteScriptUseCase {
         if (_state != ExecutionState.running) break;
       }
 
-      if (script.actionType == 'swipe' && script.swipeConfig != null) {
-        final swipe = script.swipeConfig!;
+      if (script.actionType == 'swipe') {
+        final swipe = script.swipeConfig ??
+            const SwipeConfigEntity(
+              startX: 540,
+              startY: 1500,
+              endX: 540,
+              endY: 500,
+              durationMs: 250,
+            );
 
         // Wait for any previous gesture to finish before dispatching the next one.
-        // dispatchGesture returns onCancelled if a prior gesture is still in progress,
-        // so we pre-wait swipe duration + small buffer to avoid overlap.
         await _pauseAwareDelay(swipe.durationMs + 50);
         if (_state != ExecutionState.running) break;
 
@@ -184,12 +189,12 @@ class ExecuteScriptUseCase {
           }
         }
       } else {
-        // Default click coordinate if no points are configured
-        final success = await _dispatchClick(200, 400, durationMs: 50);
+        // Default click coordinate if no points are configured in click mode
+        final success = await _dispatchClick(540, 960, durationMs: 50);
         _clicksCompleted++;
         _onTick?.call(_clicksCompleted, _elapsedSeconds);
         if (!success) {
-          logDebug('Default click dispatch not acknowledged at (200, 400)');
+          logDebug('Default click dispatch not acknowledged at (540, 960)');
         }
         await _pauseAwareDelay(20);
       }

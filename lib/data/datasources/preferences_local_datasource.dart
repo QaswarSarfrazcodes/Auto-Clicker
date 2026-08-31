@@ -130,4 +130,53 @@ class PreferencesLocalDataSource {
     final String obfuscated = _obfuscate(status.toString());
     await prefs.setString(_proUserKey, obfuscated);
   }
+
+  // -------------------------------------------------------------------------
+  // Fatigue Guard & Anti-Detection Configuration
+  // -------------------------------------------------------------------------
+
+  static const String _fatigueBreakKey = 'fatigue_break_interval_min';
+  static const String _antiDetectionJitterKey = 'anti_detection_jitter_flag';
+  static const String _autoSleepTimerKey = 'auto_sleep_timer_min';
+  static const String _batterySaverStopKey = 'battery_saver_stop_flag';
+
+  Future<int> getFatigueBreakMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_fatigueBreakKey) ?? 30;
+  }
+
+  Future<void> setFatigueBreakMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_fatigueBreakKey, minutes);
+  }
+
+  Future<bool> getAntiDetectionJitter() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_antiDetectionJitterKey) ?? true;
+  }
+
+  Future<void> setAntiDetectionJitter(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_antiDetectionJitterKey, enabled);
+  }
+
+  Future<int> getAutoSleepMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_autoSleepTimerKey) ?? 60;
+  }
+
+  Future<void> setAutoSleepMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_autoSleepTimerKey, minutes);
+  }
+
+  Future<bool> getBatterySaverStop() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_batterySaverStopKey) ?? true;
+  }
+
+  Future<void> setBatterySaverStop(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_batterySaverStopKey, enabled);
+  }
 }
